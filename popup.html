@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      min-height: 400px;
+      margin: 0;
+      padding: 16px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a1a;
+      color: #ffffff;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #333;
+    }
+    
+    .header h2 {
+      margin: 0;
+      color: #ff6b35;
+      font-size: 18px;
+    }
+    
+    .status {
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      text-align: center;
+      font-size: 12px;
+    }
+    
+    .status.connected {
+      background: #2d5a2d;
+      color: #90ee90;
+    }
+    
+    .status.disconnected {
+      background: #5a2d2d;
+      color: #ffb3b3;
+    }
+    
+    .search-box {
+      margin-bottom: 12px;
+    }
+    
+    .search-box input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #2a2a2a;
+      color: #fff;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    .emote-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .emote-item {
+      padding: 8px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    
+    .emote-item:hover {
+      background: #ff6b35;
+      border-color: #ff6b35;
+      transform: scale(1.05);
+    }
+    
+    .test-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #333;
+    }
+    
+    .test-button {
+      width: 100%;
+      padding: 10px;
+      background: #ff6b35;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    
+    .test-button:hover {
+      background: #e55a2b;
+    }
+    
+    .instructions {
+      font-size: 11px;
+      color: #aaa;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>🐝 BeeHappy</h2>
+  </div>
+  
+  <div id="status" class="status disconnected">
+    Checking connection...
+  </div>
+  
+  <div class="search-box">
+    <input type="text" placeholder="Search emotes..." id="search-input">
+  </div>
+  
+  <div id="emote-grid" class="emote-grid">
+    <!-- Emotes will be loaded here -->
+  </div>
+  
+  <div class="test-section">
+    <button id="test-button" class="test-button">Test Extension</button>
+    <button id="refresh-button" class="test-button">Refresh Emotes</button>
+    <button id="toggle-overlay" class="test-button">Toggle Overlay Chat</button>
+    
+    <div class="instructions">
+      <strong>How to test:</strong><br>
+      1. Go to any YouTube live stream<br>
+      2. Click "Toggle Overlay Chat"<br>
+      3. Type :poggers: or :kappa: in chat<br>
+      4. Watch emotes appear in overlay!
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

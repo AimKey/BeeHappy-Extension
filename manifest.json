@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "BeeHappy Emote Test",
+  "version": "1.0",
+  "description": "YouTube emote replacement test",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "content_scripts": [{
+    "matches": ["*://www.youtube.com/watch*", "*://www.youtube.com/live/*"],
+    "js": ["overlay-chat.js", "content-script.js"],
+    "run_at": "document_end"
+  }],
+  "web_accessible_resources": [{
+    "resources": ["overlay-chat.html"],
+    "matches": ["*://www.youtube.com/*"]
+  }],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "BeeHappy Emotes"
+  }
+}
