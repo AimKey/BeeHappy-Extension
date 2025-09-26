@@ -152,11 +152,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         break;
         
       case 'toggleOverlay':
+        console.log('🐝 Toggle overlay requested. overlayChat:', overlayChat);
         if (overlayChat) {
+          console.log('🐝 Calling overlayChat.toggle()');
           overlayChat.toggle();
           sendResponse({ success: true, message: 'Overlay toggled' });
         } else {
-          sendResponse({ success: false, error: 'Overlay not initialized' });
+          console.log('🐝 Overlay not initialized, attempting to initialize...');
+          // Try to initialize if not already done
+          if (window.location.href.includes('youtube.com/watch') || window.location.href.includes('youtube.com/live')) {
+            try {
+              overlayChat = new BeeHappyOverlayChat();
+              console.log('🐝 Overlay initialized on demand');
+              setTimeout(() => {
+                overlayChat.toggle();
+                sendResponse({ success: true, message: 'Overlay initialized and toggled' });
+              }, 500);
+            } catch (error) {
+              console.error('🐝 Failed to initialize overlay on demand:', error);
+              sendResponse({ success: false, error: 'Failed to initialize overlay: ' + error.message });
+            }
+          } else {
+            sendResponse({ success: false, error: 'Overlay not initialized - not on YouTube page' });
+          }
         }
         break;
         
@@ -184,8 +202,16 @@ if (window.location.href.includes('youtube.com/watch') || window.location.href.i
   // Initialize overlay chat system
   const initializeOverlay = () => {
     if (!overlayChat) {
-      overlayChat = new BeeHappyOverlayChat();
-      console.log('🐝 Overlay chat system initialized');
+      try {
+        console.log('🐝 Attempting to create BeeHappyOverlayChat...');
+        overlayChat = new BeeHappyOverlayChat();
+        console.log('🐝 Overlay chat system initialized successfully');
+      } catch (error) {
+        console.error('🐝 Failed to initialize overlay chat:', error);
+        overlayChat = null;
+      }
+    } else {
+      console.log('🐝 Overlay already initialized');
     }
   };
   
