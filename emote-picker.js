@@ -240,20 +240,33 @@ class BeeHappyEmotePicker {
         this.emoteGrid.appendChild(fragment);
     }
 
-    selectEmote(emote) {
+    async selectEmote(emote) {
         if (!this.picker) return;
 
-        // Create a custom event that overlay-chat.js will listen for
-        const event = new CustomEvent('emoteSelected', {
-            detail: {
-                emote: emote.name,
-                type: emote.type
+        const textToCopy = emote?.name || '';
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(textToCopy);
+                console.log('🐝 Copied emote to clipboard:', textToCopy);
+            } else {
+                // Fallback for environments without async clipboard API
+                const ta = document.createElement('textarea');
+                ta.value = textToCopy;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try { document.execCommand('copy'); } catch (_) {}
+                ta.remove();
+                console.log('🐝 Copied emote to clipboard (fallback):', textToCopy);
             }
-        });
-        document.dispatchEvent(event);
-
-        // Hide picker after selection
-        this.hidePicker();
+        } catch (err) {
+            console.error('🐝 Failed to copy emote to clipboard:', err);
+        } finally {
+            // Hide picker after selection
+            this.hidePicker();
+        }
     }
 
     togglePicker() {

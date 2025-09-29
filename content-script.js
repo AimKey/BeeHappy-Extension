@@ -7,8 +7,8 @@ class BeeHappyEmoteReplacer {
       '[bh:lul]': '😂LUL😂',
       '[bh:pepe]': '😢PEPE😢',
       // Vietnamese test emotes
-      '[bh:test]': '🎮TEST🎮',
-      '[bh:emote]': '⚡EMOTE⚡'
+      '[bh:quay_đều]': '🎮QUAY ĐỀU🎮',
+      '[bh:độ_mixi]': '⚡ĐỘ MIXI⚡'
     };
     this.observer = null;
     this.isProcessing = false;
@@ -35,6 +35,7 @@ class BeeHappyEmoteReplacer {
       
       if (messages.length === 0) return;
       
+      // REPLACE EMOTES FUNCTIONS
       let processedCount = 0;
       messages.forEach((msg, index) => {
         if (!msg.dataset.processed) {
@@ -51,9 +52,9 @@ class BeeHappyEmoteReplacer {
           
           if (hasChanges) {
             msg.textContent = text;
-            msg.style.color = '#ff6b35';
-            msg.style.fontWeight = 'bold';
-            msg.style.backgroundColor = 'rgba(255, 107, 53, 0.1)';
+            // msg.style.color = '#ff6b35';
+            // msg.style.fontWeight = 'bold';
+            // msg.style.backgroundColor = 'rgba(255, 107, 53, 0.1)';
             processedCount++;
           }
           

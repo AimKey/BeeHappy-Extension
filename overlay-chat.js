@@ -238,17 +238,8 @@ class BeeHappyOverlayChat {
         document.addEventListener('mousemove', (e) => this.drag(e));
         document.addEventListener('mouseup', () => this.stopDrag());
 
-        // Listen for emote selection events
-        document.addEventListener('emoteSelected', (e) => {
-            const { emote, type } = e.detail;
-            if (type === 'youtube') {
-                // For YouTube emojis, just add them directly
-                this.addMessageToOverlay('BeeHappy System', emote);
-            } else {
-                // For BeeHappy emotes, process them through the emote map
-                this.addMessageToOverlay('BeeHappy System', this.processEmotes(document.createElement('div')).innerHTML);
-            }
-        });
+        // Emote selection events no longer add messages to overlay.
+        // Intentionally left blank to avoid duplicate UI writes.
         
         // Control buttons
         minimizeBtn.addEventListener('click', () => this.toggleMinimize());
