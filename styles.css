@@ -1,0 +1,138 @@
+/* BeeHappy Chat Overlay Styles */
+.beehappy-overlay {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    width: 300px;
+    height: 400px;
+    background: rgba(33, 33, 33, 0.95);
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    z-index: 9999999;
+}
+
+#overlayHeader {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(66, 66, 66, 0.95);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    cursor: move;
+    user-select: none;
+}
+
+#overlayTitle {
+    flex-grow: 1;
+    font-size: 14px;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+#statusText {
+    font-size: 12px;
+    color: #aaa;
+    margin-right: 8px;
+}
+
+.overlay-button {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: 4px;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.overlay-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#chatContainer {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+/* Custom scrollbar for the chat container */
+#chatContainer::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chatContainer::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+#chatContainer::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+#chatContainer::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.chat-message {
+    margin-bottom: 8px;
+    word-wrap: break-word;
+}
+
+.message-author {
+    color: #ff6b35;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.message-content {
+    color: #fff;
+    display: inline;
+    white-space: pre-wrap;
+}
+
+/* Ensure all elements in message content are inline */
+.message-content > * {
+    display: inline;
+}
+
+/* YouTube Emoji Support */
+.message-content img.emoji,
+.message-content img.yt-emoji {
+    display: inline-block;
+    height: 1.2em;
+    width: auto;
+    vertical-align: -0.15em;
+    margin: 0 0.05em;
+}
+
+/* Preserve whitespace and line breaks */
+.message-content span {
+    white-space: pre-wrap;
+    display: inline;
+}
+
+/* No messages placeholder */
+.no-messages {
+    color: #888;
+    text-align: center;
+    margin-top: 20px;
+    font-style: italic;
+}
+
+/* Minimized state */
+.overlay-minimized {
+    height: auto !important;
+}
+
+.overlay-minimized #chatContainer {
+    display: none;
+}

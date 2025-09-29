@@ -1,167 +1,87 @@
 // BeeHappy Background Service Worker
-class BeeHappyBackground {
-  constructor() {
-    this.emoteCache = {};
-    this.userToken = null;
-    this.apiBaseUrl = 'https://your-api.com/api'; // Replace with actual API URL
-    this.init();
-  }
 
-  init() {
-    console.log('BeeHappy Background: Service worker started');
-    
-    // Listen for messages from content script
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      this.handleMessage(request, sender, sendResponse);
-      return true; // Keep message channel open for async response
-    });
+// Handle API requests from content scripts
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'fetch_emotes') {
+        fetchEmotes(request.url)
+            .then(data => sendResponse({ success: true, data }))
+            .catch(error => {
+                console.error('🐝 API Error:', error);
+                sendResponse({ 
+                    success: false, 
+                    error: error.message || 'Failed to fetch emotes'
+                });
+            });
+        return true; // Keep the message channel open for async response
+    }
 
-    // Load stored auth token
-    this.loadStoredAuth();
-  }
+    if (request.action === 'inject_helper_all_frames') {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tabs[0].id, allFrames: true },
+                    files: ['emote-picker.js']
+                }).then(() => {
+                    sendResponse({ success: true });
+                }).catch((error) => {
+                    console.error('🐝 Script Injection Error:', error);
+                    sendResponse({ 
+                        success: false, 
+                        error: error.message || 'Failed to inject script'
+                    });
+                });
+            }
+        });
+        return true;
+    }
+});
 
-  async loadStoredAuth() {
+// Fetch emotes from BeeHappy API with proper headers and error handling
+async function fetchEmotes(url) {
     try {
-      const result = await chrome.storage.local.get(['bh_token', 'bh_user']);
-      this.userToken = result.bh_token;
-      if (this.userToken) {
-        console.log('BeeHappy Background: Auth token loaded');
-        await this.fetchUserEmotes();
-      }
-    } catch (error) {
-      console.error('BeeHappy Background: Error loading auth:', error);
-    }
-  }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-  async handleMessage(request, sender, sendResponse) {
-    try {
-      switch (request.action) {
-        case 'getEmotes':
-          sendResponse({ emotes: this.emoteCache });
-          break;
-          
-        case 'getEmoteUrl':
-          const url = this.getEmoteUrl(request.emoteName);
-          sendResponse({ url });
-          break;
-          
-        case 'refreshEmotes':
-          await this.fetchUserEmotes();
-          sendResponse({ success: true, emotes: this.emoteCache });
-          break;
-          
-        case 'login':
-          const loginResult = await this.login(request.credentials);
-          sendResponse(loginResult);
-          break;
-          
-        default:
-          sendResponse({ error: 'Unknown action' });
-      }
-    } catch (error) {
-      console.error('BeeHappy Background: Error handling message:', error);
-      sendResponse({ error: error.message });
-    }
-  }
-
-  async fetchUserEmotes(userId = null) {
-    if (!this.userToken) {
-      console.log('BeeHappy Background: No auth token, using default emotes');
-      this.setDefaultEmotes();
-      return;
-    }
-
-    try {
-      const url = userId ? 
-        `${this.apiBaseUrl}/emotes/user/${userId}` : 
-        `${this.apiBaseUrl}/emotes/my`;
-        
-      const response = await fetch(url, {
-        headers: { 
-          'Authorization': `Bearer ${this.userToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const emotes = await response.json();
-        this.emoteCache = this.processEmoteData(emotes);
-        console.log('BeeHappy Background: Emotes fetched successfully');
-      } else {
-        console.error('BeeHappy Background: API error:', response.status);
-        this.setDefaultEmotes();
-      }
-    } catch (error) {
-      console.error('BeeHappy Background: Failed to fetch emotes:', error);
-      this.setDefaultEmotes();
-    }
-  }
-
-  setDefaultEmotes() {
-    // Fallback emotes when API is unavailable
-    this.emoteCache = {
-      ':poggers:': { url: null, text: '🎮POGGERS🎮' },
-      ':kappa:': { url: null, text: '⚡KAPPA⚡' },
-      ':lul:': { url: null, text: '😂LUL😂' },
-      ':pepehands:': { url: null, text: '😢PEPE😢' }
-    };
-  }
-
-  processEmoteData(apiEmotes) {
-    const processed = {};
-    if (Array.isArray(apiEmotes)) {
-      apiEmotes.forEach(emote => {
-        processed[`:${emote.name}:`] = {
-          url: emote.url,
-          text: emote.name,
-          id: emote.id
-        };
-      });
-    }
-    return processed;
-  }
-
-  getEmoteUrl(emoteName) {
-    const emote = this.emoteCache[emoteName];
-    return emote?.url || null;
-  }
-
-  getEmoteText(emoteName) {
-    const emote = this.emoteCache[emoteName];
-    return emote?.text || emoteName;
-  }
-
-  async login(credentials) {
-    try {
-      const response = await fetch(`${this.apiBaseUrl}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        this.userToken = data.token;
-        
-        // Store auth data
-        await chrome.storage.local.set({
-          'bh_token': this.userToken,
-          'bh_user': data.user
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Origin': 'https://www.youtube.com'
+            },
+            signal: controller.signal
         });
 
-        // Fetch user emotes
-        await this.fetchUserEmotes();
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Invalid content type: Expected JSON');
+        }
+
+        const data = await response.json();
         
-        return { success: true, user: data.user };
-      } else {
-        return { success: false, error: 'Login failed' };
-      }
+        if (!Array.isArray(data)) {
+            throw new Error('Invalid response format: Expected array');
+        }
+
+        return data;
     } catch (error) {
-      console.error('BeeHappy Background: Login error:', error);
-      return { success: false, error: error.message };
+        if (error.name === 'AbortError') {
+            throw new Error('API request timed out');
+        }
+        throw error;
     }
-  }
 }
 
-// Initialize background service
-const beeHappyBackground = new BeeHappyBackground();
+// Listen for installation/update
+chrome.runtime.onInstalled.addListener((details) => {
+    if (details.reason === 'install' || details.reason === 'update') {
+        // Clear any old data and set up initial state
+        chrome.storage.local.clear();
+        console.log('🐝 Extension installed/updated');
+    }
+});

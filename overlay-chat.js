@@ -1,5 +1,88 @@
-// BeeHappy Overlay Chat System
+/* BeeHappy Overlay Chat System
+   - If this script is injected into an iframe (chat iframe), it will act as a lightweight helper:
+     it observes yt-live-chat message nodes and posts them to the parent window using postMessage.
+   - If it's running in the top frame, it will create an overlay and listen for messages from iframe helpers.
+*/
 let chatRootElement = null;
+
+// --- If running inside a frame (chat iframe), bootstrap a helper observer that posts messages to parent ---
+if (window.top !== window.self) {
+  (function setupIframeHelper() {
+    try {
+      const doc = document;
+      const sendToParent = (author, text) => {
+        try {
+          window.parent.postMessage({ source: 'BeeHappy', type: 'chat_message', author, text }, '*');
+        } catch (err) {
+          // ignore postMessage failures
+        }
+      };
+
+      const processMessageNode = (node) => {
+        try {
+          const author = node.querySelector('#author-name')?.textContent?.trim() || '';
+          const message = node.querySelector('#message')?.innerHTML || '';
+          if (author || message) sendToParent(author, message);
+        } catch (e) {
+          // ignore individual node errors
+        }
+      };
+
+      const scanExisting = () => {
+        const existing = doc.querySelectorAll('yt-live-chat-text-message-renderer');
+        existing.forEach(processMessageNode);
+      };
+
+      const attachObserver = (container) => {
+        if (!container) return false;
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach(m => {
+            m.addedNodes.forEach(n => {
+              if (n.nodeType === 1 && n.tagName === 'YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER') {
+                processMessageNode(n);
+              } else if (n.querySelectorAll) {
+                const found = n.querySelectorAll('yt-live-chat-text-message-renderer');
+                found.forEach(processMessageNode);
+              }
+            });
+          });
+        });
+        observer.observe(container, { childList: true, subtree: true });
+        return true;
+      };
+
+      const tryStart = () => {
+        // common chat containers inside iframe
+        const selectors = [
+          'yt-live-chat-renderer #items',
+          '#items',
+          'yt-live-chat-item-list-renderer',
+          '#chat-messages',
+          'yt-live-chat-renderer'
+        ];
+
+        for (const s of selectors) {
+          const c = doc.querySelector(s);
+          if (c) {
+            scanExisting();
+            attachObserver(c);
+            return;
+          }
+        }
+
+        // Retry after delay if not found
+        setTimeout(tryStart, 1500);
+      };
+
+      tryStart();
+    } catch (err) {
+      // If anything fails, retry once after a delay
+      setTimeout(setupIframeHelper, 2000);
+    }
+  })();
+}
+
+// --- Continue with main overlay class (top-frame behavior will run below) ---
 class BeeHappyOverlayChat {
     constructor() {
         this.overlay = null;
@@ -10,21 +93,21 @@ class BeeHappyOverlayChat {
         this.messageCount = 0;
         this.maxMessages = 50; // Limit messages to prevent memory issues
 
-        // Emote mapping
+        // Emote mapping using new [bh:name] syntax
         this.emoteMap = {
-            ':poggers:': '🎮',
-            ':kappa:': '⚡',
-            ':lul:': '😂',
-            ':pepehands:': '😢',
-            ':pog:': '🔥',
-            ':omegalul:': '🤣',
-            ':sadge:': '😭',
-            ':monkas:': '😰',
+            '[bh:poggers]': '🎮',
+            '[bh:kappa]': '⚡',
+            '[bh:lul]': '😂',
+            '[bh:pepe]': '😢',
+            '[bh:pog]': '🔥',
+            '[bh:omegalul]': '🤣',
+            '[bh:sadge]': '😭',
+            '[bh:monkas]': '😰',
             // Vietnamese test emotes
-            'đi': '🎮',
-            'của': '⚡',
-            'và': '🔥',
-            'với': '😊'
+            '[bh:test]': '🎮',
+            '[bh:emote]': '⚡',
+            '[bh:fire]': '🔥',
+            '[bh:smile]': '😊'
         };
 
         this.init();
@@ -64,6 +147,49 @@ class BeeHappyOverlayChat {
                 console.log('🐝 CSS styles injected');
             }
 
+            // Initialize emote picker after overlay is ready
+            const initEmotePicker = () => {
+                // Wait for overlay elements to be ready
+                const emotePicker = document.getElementById('emotePicker');
+                const emoteSearch = document.getElementById('emoteSearchInput');
+                const emoteGrid = document.getElementById('emoteGrid');
+                const pickerTabs = document.querySelectorAll('.picker-tab');
+
+                if (!emotePicker || !emoteSearch || !emoteGrid || !pickerTabs.length) {
+                    console.log('🐝 Waiting for emote picker elements...');
+                    setTimeout(initEmotePicker, 50); // Reduced delay
+                    return;
+                }
+
+                // Ensure picker starts hidden
+                emotePicker.classList.remove('visible');
+
+                // Load emote picker config script first
+                const configScript = document.createElement('script');
+                configScript.src = chrome.runtime.getURL('emote-picker-config.js');
+                configScript.id = 'beehappy-emote-picker-config';
+                configScript.onload = () => {
+                    // Load emote picker script after config is loaded
+                    const emotePickerScript = document.createElement('script');
+                    emotePickerScript.src = chrome.runtime.getURL('emote-picker.js');
+                    emotePickerScript.id = 'beehappy-emote-picker';
+                    emotePickerScript.onload = () => {
+                        console.log('🐝 Emote picker scripts loaded');
+                        // Retry initialization after a short delay to ensure overlay is ready
+                        setTimeout(() => {
+                            if (window.beeHappyEmotePicker) {
+                                window.beeHappyEmotePicker.retryInit();
+                            }
+                        }, 200);
+                    };
+                    document.head.appendChild(emotePickerScript);
+                };
+                document.head.appendChild(configScript);
+            };
+
+            // Start initialization
+            initEmotePicker();
+
             // Extract the overlay element
             this.overlay = tempDiv.querySelector('.beehappy-overlay');
 
@@ -95,25 +221,56 @@ class BeeHappyOverlayChat {
 
     setupEventListeners() {
         if (!this.overlay) return;
-
+        
         const header = this.overlay.querySelector('#overlayHeader');
         const minimizeBtn = this.overlay.querySelector('#minimizeBtn');
+        const testBtn = this.overlay.querySelector('#testBtn');
         const closeBtn = this.overlay.querySelector('#closeBtn');
-
-        // Dragging functionality
-        header.addEventListener('mousedown', (e) => this.startDrag(e));
+        
+        // Dragging functionality - exclude control buttons
+        header.addEventListener('mousedown', (e) => {
+            // Don't start dragging if clicking on control buttons
+            if (e.target.closest('.control-btn')) {
+                return;
+            }
+            this.startDrag(e);
+        });
         document.addEventListener('mousemove', (e) => this.drag(e));
         document.addEventListener('mouseup', () => this.stopDrag());
 
+        // Listen for emote selection events
+        document.addEventListener('emoteSelected', (e) => {
+            const { emote, type } = e.detail;
+            if (type === 'youtube') {
+                // For YouTube emojis, just add them directly
+                this.addMessageToOverlay('BeeHappy System', emote);
+            } else {
+                // For BeeHappy emotes, process them through the emote map
+                this.addMessageToOverlay('BeeHappy System', this.processEmotes(document.createElement('div')).innerHTML);
+            }
+        });
+        
         // Control buttons
         minimizeBtn.addEventListener('click', () => this.toggleMinimize());
+        if (testBtn) {
+            testBtn.addEventListener('click', () => {
+                console.log('🐝 Overlay force test triggered');
+                this.addTestMessage();
+            });
+        }
         closeBtn.addEventListener('click', () => this.closeOverlay());
-
+        
         // Prevent text selection while dragging
         header.addEventListener('selectstart', (e) => e.preventDefault());
     }
 
     startDrag(e) {
+        // Don't start dragging if emote picker is visible
+        const emotePicker = document.getElementById('emotePicker');
+        if (emotePicker && emotePicker.classList.contains('visible')) {
+            return;
+        }
+        
         this.isDragging = true;
         const rect = this.overlay.getBoundingClientRect();
         this.dragOffset.x = e.clientX - rect.left;
@@ -158,9 +315,8 @@ class BeeHappyOverlayChat {
 
     closeOverlay() {
         if (this.overlay) {
-            this.overlay.remove();
-            this.overlay = null;
-            console.log('🐝 Overlay closed');
+            this.overlay.style.display = 'none';
+            console.log('🐝 Overlay hidden');
         }
     }
 
@@ -198,7 +354,6 @@ class BeeHappyOverlayChat {
             mutations.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
                     if (node.nodeType === 1 && node.tagName === 'YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER') {
-                        console.log('🐝 New chat message detected:', node);
                         this.processChatMessage(node);
                     }
                 });
@@ -207,20 +362,10 @@ class BeeHappyOverlayChat {
 
         // Find chat container and start observing
         const findChatContainer = () => {
-            // const chatContainer = document.querySelector('yt-live-chat-renderer #items') ||
-            //                     document.querySelector('#chat-messages') ||
-            //                     document.querySelector('yt-live-chat-item-list-renderer');
-            // console.log('=== Searching in normal DOM ===')
-            // console.log('🐝 Chat container:', chatContainer);
-
-            // let chatContainer = "Debugging other selectors"
-            // Get the iframe
             const chatFrame = document.querySelector('#chatframe');
-            console.log("[BeeHappy] Chat iframe:", chatFrame);
 
             if (!chatFrame) {
-                console.log('[BeeHappy] Chat iframe not found, retrying...');
-                setTimeout(findChatContainer, 2000);
+                setTimeout(findChatContainer, 1000); // Reduced delay
                 return;
             }
 
@@ -228,32 +373,27 @@ class BeeHappyOverlayChat {
             const chatDoc = chatFrame?.contentDocument || chatFrame?.contentWindow?.document;
             
             if (!chatDoc) {
-                console.log('[BeeHappy] Could not access chat iframe document, retrying...');
-                setTimeout(findChatContainer, 2000);
+                setTimeout(findChatContainer, 1000); // Reduced delay
                 return;
             }
 
             chatRootElement = chatDoc;
-            console.log("[BeeHappy] Chat document set:", chatRootElement);
 
             const chatContainer = chatDoc.querySelector('yt-live-chat-renderer #items') ||
                 chatDoc.querySelector('#chat-messages') ||
                 chatDoc.querySelector('yt-live-chat-item-list-renderer');
 
             if (chatContainer) {
-                console.log('[BeeHappy] Chat container found:', chatContainer);
                 observer.observe(chatContainer, {
                     childList: true,
                     subtree: true
                 });
-                console.log('🐝 Chat monitoring started successfully');
                 this.updateStatus('Monitoring YouTube chat');
 
                 // Process existing messages
                 this.processExistingMessages();
             } else {
-                console.log('[BeeHappy] Chat container not found in iframe, retrying...');
-                setTimeout(findChatContainer, 2000);
+                setTimeout(findChatContainer, 1000); // Reduced delay
             }
         };
 
@@ -261,17 +401,63 @@ class BeeHappyOverlayChat {
     }
 
     processExistingMessages() {
-        if (!chatRootElement) {
-            console.log('🐝 Chat document not available for processing existing messages');
-            return;
-        }
+        if (!chatRootElement) return;
         
         const existingMessages = chatRootElement.querySelectorAll('yt-live-chat-text-message-renderer');
-        console.log(`🐝 Processing ${existingMessages.length} existing messages`);
-
-        // Display all instead of just the last 10
-        const recentMessages = Array.from(existingMessages)
+        const recentMessages = Array.from(existingMessages);
         recentMessages.forEach(msg => this.processChatMessage(msg));
+    }
+
+    // Start a periodic scan as a fallback in case MutationObserver misses messages
+    startPeriodicScan(intervalMs = 2000) {
+        if (this._scanInterval) return;
+        this._scanInterval = setInterval(() => {
+            try {
+                if (!chatRootElement) return;
+                const nodes = chatRootElement.querySelectorAll('yt-live-chat-text-message-renderer');
+                nodes.forEach(node => {
+                    if (!node.dataset.bhProcessed) {
+                        try {
+                            node.dataset.bhProcessed = 'true';
+                            this.processChatMessage(node);
+                        } catch (e) {
+                            // ignore node errors
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('🐝 Periodic scan error:', err);
+            }
+        }, intervalMs);
+    }
+
+    stopPeriodicScan() {
+        if (this._scanInterval) {
+            clearInterval(this._scanInterval);
+            this._scanInterval = null;
+        }
+    }
+
+    // Force test helper: adds synthetic messages into the overlay for debugging
+    addTestMessage() {
+        try {
+            if (!this.chatContainer) {
+                console.warn('🐝 addTestMessage: chatContainer not ready');
+                return;
+            }
+
+            // Remove placeholder if present
+            const noMessages = this.chatContainer.querySelector('.no-messages');
+            if (noMessages) noMessages.remove();
+
+            // Two synthetic messages using new [bh:name] syntax
+            this.addMessageToOverlay('BeeHappy System', 'Testing emotes: [bh:poggers] [bh:kappa] 😊', 'test');
+            setTimeout(() => {
+                this.addMessageToOverlay('BeeHappy System', 'More emotes: [bh:lul] [bh:test] 🎮', 'test2');
+            }, 500);
+        } catch (err) {
+            console.error('🐝 addTestMessage error:', err);
+        }
     }
 
     processChatMessage(messageElement) {
@@ -280,42 +466,82 @@ class BeeHappyOverlayChat {
             const authorElement = messageElement.querySelector('#author-name');
             const messageContentElement = messageElement.querySelector('#message');
 
-            if (!authorElement || !messageContentElement) {
-                console.log('🐝 Message missing author or content elements');
-                return;
-            }
+            if (!authorElement || !messageContentElement) return;
 
             const author = authorElement.textContent.trim();
-            const originalText = messageContentElement.textContent.trim();
+            const messageHtml = messageContentElement.innerHTML;
 
-            console.log(`🐝 Processing message from ${author}: "${originalText}"`);
+            // Create a temporary div to process the message
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = messageHtml;
 
-            // Process emotes
-            const processedText = this.processEmotes(originalText);
+            // Process our emotes while preserving YouTube emojis
+            const processedHtml = this.processEmotes(tempDiv);
 
-            // Add ALL messages to overlay (removed filtering)
-            this.addMessageToOverlay(author, processedText, originalText);
+            // Add message to overlay
+            this.addMessageToOverlay(author, processedHtml);
 
         } catch (error) {
             console.error('🐝 Error processing chat message:', error);
         }
     }
 
+    processEmotes(container) {
+        // Create a wrapper span to ensure inline flow
+        const wrapper = document.createElement('span');
+        wrapper.style.whiteSpace = 'pre-wrap';
 
+        // Process each node
+        Array.from(container.childNodes).forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                // Process text nodes for [bh:name] emotes
+                let text = node.textContent;
+                for (const [pattern, emoji] of Object.entries(this.emoteMap)) {
+                    const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                    text = text.replace(regex, emoji);
+                }
+                const span = document.createElement('span');
+                span.textContent = text;
+                wrapper.appendChild(span);
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.tagName === 'IMG' && (node.classList.contains('emoji') || node.classList.contains('yt-emoji'))) {
+                    // Preserve YouTube emoji images
+                    const clone = node.cloneNode(true);
+                    clone.classList.add('yt-emoji');
+                    // Ensure src attribute is preserved
+                    if (clone.src) {
+                        clone.setAttribute('src', clone.src);
+                    }
+                    wrapper.appendChild(clone);
+                } else {
+                    // Handle nested emoji elements
+                    const emojiImg = node.querySelector('img.emoji');
+                    if (emojiImg) {
+                        const clone = emojiImg.cloneNode(true);
+                        clone.classList.add('yt-emoji');
+                        if (clone.src) {
+                            clone.setAttribute('src', clone.src);
+                        }
+                        wrapper.appendChild(clone);
+                    } else {
+                        // Process text content for other elements
+                        const span = document.createElement('span');
+                        let text = node.textContent;
+                        for (const [pattern, emoji] of Object.entries(this.emoteMap)) {
+                            const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                            text = text.replace(regex, emoji);
+                        }
+                        span.textContent = text;
+                        wrapper.appendChild(span);
+                    }
+                }
+            }
+        });
 
-    processEmotes(text) {
-        let processedText = text;
-
-        // Replace emote patterns with emoji directly (no HTML spans)
-        for (const [pattern, emoji] of Object.entries(this.emoteMap)) {
-            const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-            processedText = processedText.replace(regex, emoji);
-        }
-
-        return processedText;
+        return wrapper.innerHTML;
     }
 
-    addMessageToOverlay(author, processedText, originalText) {
+    addMessageToOverlay(author, processedHtml) {
         if (!this.chatContainer) return;
 
         // Remove "no messages" placeholder
@@ -329,7 +555,7 @@ class BeeHappyOverlayChat {
         messageDiv.className = 'chat-message';
         messageDiv.innerHTML = `
             <div class="message-author">${this.escapeHtml(author)}</div>
-            <div class="message-content">${processedText}</div>
+            <div class="message-content">${processedHtml}</div>
         `;
 
         // Add to chat container
@@ -347,8 +573,6 @@ class BeeHappyOverlayChat {
 
         // Auto-scroll to bottom
         this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
-
-        console.log(`🐝 Added message from ${author}: ${originalText}`);
     }
 
     escapeHtml(text) {
@@ -364,7 +588,6 @@ class BeeHappyOverlayChat {
         }
     }
 
-    // Public methods for external control
     show() {
         if (this.overlay) {
             this.overlay.style.display = 'flex';
@@ -379,24 +602,14 @@ class BeeHappyOverlayChat {
 
     toggle() {
         if (this.overlay) {
-            // Check current display style (use inline style since we control it)
             const isCurrentlyVisible = this.overlay.style.display === 'flex';
-            
-            // Toggle: if visible, hide it; if hidden, show it
             this.overlay.style.display = isCurrentlyVisible ? 'none' : 'flex';
             
-            // Debug: Log overlay state and position
-            console.log('🐝 Overlay toggled. Was visible:', isCurrentlyVisible, 'Now display:', this.overlay.style.display);
-            
-            // If we just made it visible, log its position to make sure it's on screen
             if (this.overlay.style.display === 'flex') {
                 const rect = this.overlay.getBoundingClientRect();
-                console.log('🐝 Overlay should now be visible at:', rect);
-                console.log('🐝 Viewport size:', { width: window.innerWidth, height: window.innerHeight });
                 
                 // Make sure it's positioned on screen
                 if (rect.right > window.innerWidth || rect.left < 0 || rect.top < 0 || rect.bottom > window.innerHeight) {
-                    console.log('🐝 Overlay might be off-screen, repositioning...');
                     this.overlay.style.position = 'fixed';
                     this.overlay.style.top = '100px';
                     this.overlay.style.right = '20px';

@@ -5,17 +5,38 @@
   "description": "YouTube emote replacement test",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "scripting",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/*",
+    "https://www.youtube.com/*",
+    "*://*.youtube.com/*"
   ],
   "content_scripts": [{
-    "matches": ["*://www.youtube.com/watch*", "*://www.youtube.com/live/*"],
-    "js": ["overlay-chat.js", "content-script.js"],
-    "run_at": "document_end"
+    "matches": ["*://www.youtube.com/*"],
+    "js": ["emote-picker-config.js", "overlay-chat.js", "content-script.js"],
+    "run_at": "document_end",
+    "all_frames": true
   }],
   "web_accessible_resources": [{
-    "resources": ["overlay-chat.html"],
-    "matches": ["*://www.youtube.com/*"]
+    "resources": [
+      "overlay-chat.html",
+      "emote-picker.js",
+      "emote-picker-config.js",
+      "styles.css",
+      "images/*"
+    ],
+    "matches": [
+      "*://*.youtube.com/*",
+      "https://www.youtube.com/*"
+    ]
   }],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self'"
+  },
   "background": {
     "service_worker": "background.js"
   },

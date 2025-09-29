@@ -22,6 +22,18 @@
             --text-muted: #71717A;
         }
         
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
         .beehappy-overlay {
             position: fixed;
             top: 100px;
@@ -89,6 +101,132 @@
             color: var(--accent);
             border-color: var(--accent);
         }
+
+        /* Emote picker button styles */
+        .emote-btn {
+            background: #0A0A0A;
+            color: var(--text-primary);
+            border-color: var(--primary);
+        }
+
+        .emote-btn:hover, .emote-btn.active {
+            background: var(--dark-hover);
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        /* Emote picker panel styles */
+        .emote-picker {
+            position: absolute;
+            right: 0;
+            bottom: 100%;
+            width: 320px;
+            background: var(--dark-surface);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            z-index: 10001;
+            margin-bottom: 8px;
+        }
+
+        .emote-picker.visible {
+            display: flex;
+        }
+
+        /* Ensure picker stays within viewport on smaller screens */
+        /* @media (max-width: 400px) {
+            .emote-picker {
+                width: calc(100vw - 20px);
+                right: 10px;
+                left: 10px;
+            }
+        } */
+
+        .picker-header {
+            padding: 12px;
+            border-bottom: 1px solid var(--dark-border);
+        }
+
+        .picker-search {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--dark-bg);
+            border: 1px solid var(--dark-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .picker-search:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .picker-tabs {
+            display: flex;
+            gap: 2px;
+            padding: 8px 12px;
+            background: var(--dark-bg);
+            border-bottom: 1px solid var(--dark-border);
+        }
+
+        .picker-tab {
+            padding: 6px 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .picker-tab:hover {
+            background: var(--dark-hover);
+            color: var(--text-primary);
+        }
+
+        .picker-tab.active {
+            background: var(--primary);
+            color: var(--text-primary);
+        }
+
+        .picker-content {
+            height: 300px;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .emote-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+
+        .emote-item {
+            aspect-ratio: 1;
+            padding: 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--dark-bg);
+            transition: all 0.15s ease;
+        }
+
+        .emote-item:hover {
+            background: var(--dark-hover);
+            transform: scale(1.1);
+        }
+
+        .emote-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
         
         .chat-container {
             flex: 1;
@@ -147,6 +285,16 @@
             background: var(--dark-bg);
             border-radius: 0 0 11px 11px;
             border-top: 1px solid var(--dark-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .footer-controls {
+            display: flex;
+            gap: 6px;
+            position: relative; /* Anchor for absolute-positioned picker */
+            align-items: center;
         }
         
         .status-indicator {
@@ -205,58 +353,68 @@
         <div class="overlay-header" id="overlayHeader">
             <div class="overlay-title">BeeHappy Chat</div>
             <div class="overlay-controls">
-                <button class="control-btn minimize-btn" id="minimizeBtn">−</button>
-                <button class="control-btn close-btn" id="closeBtn">×</button>
+                <button class="control-btn minimize-btn" id="minimizeBtn" title="Minimize" aria-label="Minimize overlay">−</button>
+                <button class="control-btn" id="testBtn" title="Force Test" aria-label="Test overlay" style="background:#3cb371;color:#fff;">●</button>
+                <button class="control-btn close-btn" id="closeBtn" title="Close" aria-label="Close overlay">×</button>
             </div>
         </div>
         
-        <div class="chat-container" id="chatContainer">
+        <div class="chat-container" id="chatContainer" role="log" aria-label="Chat messages">
             <div class="no-messages">Waiting for chat messages...</div>
         </div>
         
         <div class="overlay-footer">
-            <div class="status-indicator">
+            <div class="status-indicator" role="status">
                 <div class="status-dot"></div>
                 <span>Monitoring YouTube chat</span>
             </div>
+            <div class="footer-controls">
+                <button class="control-btn emote-btn" id="emoteBtn" title="Emote Picker" aria-label="Open emote picker" onclick="window.beeHappyEmotePicker?.togglePicker()">😊</button>
+
+                <!-- Emote Picker Panel (anchored to footer-controls) -->
+                <div class="emote-picker" id="emotePicker" role="dialog" aria-label="Emote picker">
+                    <div class="picker-header">
+                        <label for="emoteSearchInput" class="visually-hidden">Search Emotes</label>
+                        <input type="text" 
+                               class="picker-search" 
+                               placeholder="Search emotes..." 
+                               id="emoteSearchInput"
+                               name="emoteSearch"
+                               aria-label="Search emotes"
+                               autocomplete="off">
+                    </div>
+                    <div class="picker-tabs" role="tablist" aria-label="Emote categories">
+                        <button class="picker-tab active" 
+                                role="tab" 
+                                aria-selected="true" 
+                                aria-controls="youtube-emotes" 
+                                id="youtube-tab" 
+                                data-tab="youtube">
+                            YouTube
+                        </button>
+                        <button class="picker-tab" 
+                                role="tab" 
+                                aria-selected="false" 
+                                aria-controls="beehappy-emotes" 
+                                id="beehappy-tab" 
+                                data-tab="beehappy">
+                            BeeHappy
+                        </button>
+                    </div>
+                    <div class="picker-content">
+                        <div class="emote-grid" 
+                             id="emoteGrid"
+                             role="tabpanel"
+                             aria-labelledby="youtube-tab">
+                            <!-- Emotes will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        
     </div>
 
-    <script>
-        // Minimal JavaScript - only essential functionality
-        const overlay = document.getElementById('beeHappyOverlay');
-        const header = document.getElementById('overlayHeader');
-        const minimizeBtn = document.getElementById('minimizeBtn');
-        const closeBtn = document.getElementById('closeBtn');
-
-        // Simple dragging
-        let isDragging = false;
-        let dragOffset = { x: 0, y: 0 };
-
-        header.onmousedown = (e) => {
-            isDragging = true;
-            dragOffset.x = e.clientX - overlay.offsetLeft;
-            dragOffset.y = e.clientY - overlay.offsetTop;
-        };
-
-        document.onmousemove = (e) => {
-            if (isDragging) {
-                overlay.style.left = (e.clientX - dragOffset.x) + 'px';
-                overlay.style.top = (e.clientY - dragOffset.y) + 'px';
-                overlay.style.right = 'auto';
-            }
-        };
-
-        document.onmouseup = () => isDragging = false;
-
-        // Toggle minimize
-        minimizeBtn.onclick = () => {
-            overlay.classList.toggle('overlay-minimized');
-            minimizeBtn.textContent = overlay.classList.contains('overlay-minimized') ? '+' : '−';
-        };
-
-        // Close overlay
-        closeBtn.onclick = () => overlay.style.display = 'none';
-    </script>
 </body>
 </html>

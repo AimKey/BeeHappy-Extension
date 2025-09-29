@@ -2,13 +2,13 @@
 class BeeHappyEmoteReplacer {
   constructor() {
     this.emoteMap = {
-      ':poggers:': '🎮POGGERS🎮',
-      ':kappa:': '⚡KAPPA⚡',
-      ':lul:': '😂LUL😂',
-      ':pepehands:': '😢PEPE😢',
+      '[bh:poggers]': '🎮POGGERS🎮',
+      '[bh:kappa]': '⚡KAPPA⚡',
+      '[bh:lul]': '😂LUL😂',
+      '[bh:pepe]': '😢PEPE😢',
       // Vietnamese test emotes
-      'đi': '🎮TEST🎮',
-      'của': '⚡EMOTE⚡'
+      '[bh:test]': '🎮TEST🎮',
+      '[bh:emote]': '⚡EMOTE⚡'
     };
     this.observer = null;
     this.isProcessing = false;
@@ -30,16 +30,10 @@ class BeeHappyEmoteReplacer {
       let messages = [];
       for (const selector of selectors) {
         messages = document.querySelectorAll(selector);
-        if (messages.length > 0) {
-          console.log(`🐝 Found ${messages.length} messages using selector: ${selector}`);
-          break;
-        }
+        if (messages.length > 0) break;
       }
       
-      if (messages.length === 0) {
-        console.log('🐝 No chat messages found with any selector');
-        return;
-      }
+      if (messages.length === 0) return;
       
       let processedCount = 0;
       messages.forEach((msg, index) => {
@@ -47,14 +41,11 @@ class BeeHappyEmoteReplacer {
           let text = msg.textContent;
           let hasChanges = false;
           
-          console.log(`🐝 Processing message ${index}: "${text}"`);
-          
           // Replace emote patterns
           for (const [pattern, replacement] of Object.entries(this.emoteMap)) {
             if (text.includes(pattern)) {
               text = text.replace(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacement);
               hasChanges = true;
-              console.log(`🐝 Replaced "${pattern}" with "${replacement}"`);
             }
           }
           
@@ -64,17 +55,11 @@ class BeeHappyEmoteReplacer {
             msg.style.fontWeight = 'bold';
             msg.style.backgroundColor = 'rgba(255, 107, 53, 0.1)';
             processedCount++;
-            console.log(`🐝 Applied styling to message: "${text}"`);
           }
           
           msg.dataset.processed = 'true';
         }
       });
-      
-      if (processedCount > 0) {
-        console.log(`🐝 Successfully processed ${processedCount} messages with emotes`);
-      }
-      
     } catch (error) {
       console.error('🐝 BeeHappy: Error processing emotes:', error);
     } finally {
@@ -88,12 +73,9 @@ class BeeHappyEmoteReplacer {
                          document.querySelector('#chat');
     
     if (!chatContainer) {
-      console.log('BeeHappy: Chat container not found, retrying...');
       setTimeout(() => this.startObserver(), 2000);
       return;
     }
-
-    console.log('BeeHappy: Chat container found, starting observer');
     
     this.observer = new MutationObserver((mutations) => {
       let hasNewMessages = false;
@@ -123,23 +105,29 @@ class BeeHappyEmoteReplacer {
   }
 
   init() {
-    console.log('BeeHappy: Initializing emote replacer...');
     setTimeout(() => this.startObserver(), 3000);
   }
 }
 
+// Global overlay chat instance
+let overlayChat = null;
+
 // Message handling for communication with popup and background
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Skip message handling in iframes
+  if (window.top !== window) {
+    sendResponse({ error: 'Not available in iframe' });
+    return true;
+  }
+
   try {
     switch (request.action) {
       case 'test':
-        console.log('BeeHappy: Test message received:', request.message);
         sendResponse({ success: true, message: 'Content script is working!' });
         break;
         
       case 'insertEmote':
         // Future feature: Insert emote at cursor position
-        console.log('BeeHappy: Insert emote request:', request.emoteName);
         sendResponse({ success: true });
         break;
         
@@ -152,28 +140,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         break;
         
       case 'toggleOverlay':
-        console.log('🐝 Toggle overlay requested. overlayChat:', overlayChat);
         if (overlayChat) {
-          console.log('🐝 Calling overlayChat.toggle()');
           overlayChat.toggle();
           sendResponse({ success: true, message: 'Overlay toggled' });
         } else {
-          console.log('🐝 Overlay not initialized, attempting to initialize...');
           // Try to initialize if not already done
           if (window.location.href.includes('youtube.com/watch') || window.location.href.includes('youtube.com/live')) {
             try {
               overlayChat = new BeeHappyOverlayChat();
-              console.log('🐝 Overlay initialized on demand');
               setTimeout(() => {
                 overlayChat.toggle();
                 sendResponse({ success: true, message: 'Overlay initialized and toggled' });
               }, 500);
             } catch (error) {
-              console.error('🐝 Failed to initialize overlay on demand:', error);
               sendResponse({ success: false, error: 'Failed to initialize overlay: ' + error.message });
             }
           } else {
-            sendResponse({ success: false, error: 'Overlay not initialized - not on YouTube page' });
+            sendResponse({ success: false, error: 'Not on YouTube page' });
           }
         }
         break;
@@ -182,57 +165,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ error: 'Unknown action' });
     }
   } catch (error) {
-    console.error('BeeHappy: Error handling message:', error);
     sendResponse({ error: error.message });
   }
   
   return true; // Keep message channel open
 });
 
-// Initialize the BeeHappy overlay system
-console.log('🐝 BeeHappy Extension Started!', window.location.href);
-console.log('🐝 Document ready state:', document.readyState);
-
-let overlayChat = null;
-
-// Debug: Check if we're on the right page
-if (window.location.href.includes('youtube.com/watch') || window.location.href.includes('youtube.com/live')) {
-  console.log('🐝 On YouTube watch/live page - proceeding with overlay initialization');
-  
-  // Initialize overlay chat system
-  const initializeOverlay = () => {
-    if (!overlayChat) {
-      try {
-        console.log('🐝 Attempting to create BeeHappyOverlayChat...');
-        overlayChat = new BeeHappyOverlayChat();
-        console.log('🐝 Overlay chat system initialized successfully');
-      } catch (error) {
-        console.error('🐝 Failed to initialize overlay chat:', error);
-        overlayChat = null;
-      }
-    } else {
-      console.log('🐝 Overlay already initialized');
-    }
-  };
-  
-  // Start immediately and also when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('🐝 DOM loaded, initializing overlay...');
-      setTimeout(initializeOverlay, 1000);
-    });
-  } else {
-    setTimeout(initializeOverlay, 1000);
-  }
-  
-  // Also try after a longer delay for YouTube's dynamic loading
-  setTimeout(() => {
-    console.log('🐝 Delayed overlay initialization attempt...');
-    if (!overlayChat) {
-      initializeOverlay();
-    }
-  }, 3000);
-  
+// Initialize the BeeHappy system
+if (window.top !== window) {
+  // In iframe: only initialize emote replacer
+  const replacer = new BeeHappyEmoteReplacer();
+  replacer.init();
 } else {
-  console.log('🐝 Not on YouTube watch page, skipping initialization');
+  // In main page: check if we should initialize overlay
+  if (window.location.href.includes('youtube.com/watch') || window.location.href.includes('youtube.com/live')) {
+    const initializeOverlay = () => {
+      if (!overlayChat) {
+        try {
+          overlayChat = new BeeHappyOverlayChat();
+
+          // Ask background to inject helper into all frames
+          try {
+            chrome.runtime.sendMessage({ action: 'inject_helper_all_frames' }, (resp) => {
+              if (!resp?.success && resp?.error !== 'scripting.executeScript not available') {
+                console.warn('🐝 inject_helper_all_frames failed:', resp?.error);
+              }
+            });
+          } catch (e) {
+            // Ignore errors - iframe helper is optional
+          }
+        } catch (error) {
+          console.error('🐝 Failed to initialize overlay:', error);
+          overlayChat = null;
+        }
+      }
+    };
+    
+    // Try to initialize as soon as possible
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initializeOverlay, 1000);
+      });
+    } else {
+      setTimeout(initializeOverlay, 1000);
+    }
+    
+    // Also try after a delay for YouTube's dynamic loading
+    setTimeout(() => {
+      if (!overlayChat) initializeOverlay();
+    }, 3000);
+  }
 }
