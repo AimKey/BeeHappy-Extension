@@ -12,6 +12,11 @@ class BeeHappyEmoteReplacer {
     };
     this.observer = null;
     this.isProcessing = false;
+
+    // Build a single regex matching any emote token
+    const escapeToken = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = Object.keys(this.emoteMap).map(escapeToken);
+    this.tokenRegex = parts.length ? new RegExp(parts.join('|'), 'g') : null;
   }
 
   replaceEmotes() {
@@ -35,37 +40,76 @@ class BeeHappyEmoteReplacer {
       
       if (messages.length === 0) return;
       
-      // REPLACE EMOTES FUNCTIONS
-      let processedCount = 0;
-      messages.forEach((msg, index) => {
-        if (!msg.dataset.processed) {
-          let text = msg.textContent;
-          let hasChanges = false;
-          
-          // Replace emote patterns
-          for (const [pattern, replacement] of Object.entries(this.emoteMap)) {
-            if (text.includes(pattern)) {
-              text = text.replace(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacement);
-              hasChanges = true;
-            }
-          }
-          
-          if (hasChanges) {
-            msg.textContent = text;
-            // msg.style.color = '#ff6b35';
-            // msg.style.fontWeight = 'bold';
-            // msg.style.backgroundColor = 'rgba(255, 107, 53, 0.1)';
-            processedCount++;
-          }
-          
-          msg.dataset.processed = 'true';
-        }
-      });
+      // DOM-safe replace: transform text nodes into spans without touching structure
+      messages.forEach((msg) => this.transformMessage(msg));
     } catch (error) {
       console.error('🐝 BeeHappy: Error processing emotes:', error);
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  transformMessage(msg) {
+    // If we already added our spans here, skip until YouTube re-renders
+    if (msg.querySelector('.bh-emote')) return;
+    if (!this.tokenRegex) return;
+
+    const walker = document.createTreeWalker(msg, NodeFilter.SHOW_TEXT, null);
+    const targets = [];
+    let t;
+    while ((t = walker.nextNode())) {
+      const value = t.nodeValue;
+      if (!value) continue;
+      this.tokenRegex.lastIndex = 0;
+      if (this.tokenRegex.test(value)) targets.push(t);
+    }
+
+    targets.forEach((textNode) => {
+      const original = textNode.nodeValue || '';
+      if (!original) return;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      this.tokenRegex.lastIndex = 0;
+      let m;
+      while ((m = this.tokenRegex.exec(original)) !== null) {
+        const start = m.index;
+        const end = start + m[0].length;
+        if (start > last) frag.appendChild(document.createTextNode(original.slice(last, start)));
+        const span = document.createElement('span');
+        span.className = 'bh-emote';
+        span.textContent = this.emoteMap[m[0]] || m[0];
+        frag.appendChild(span);
+        last = end;
+      }
+      if (last < original.length) frag.appendChild(document.createTextNode(original.slice(last)));
+      if (textNode.parentNode) textNode.parentNode.replaceChild(frag, textNode);
+    });
+  }
+
+  rescanExisting() {
+    try {
+      const selectors = [
+        'yt-live-chat-text-message-renderer #message',
+        'yt-live-chat-text-message-renderer .message',
+        'yt-live-chat-text-message-renderer span[id="message"]',
+        '.yt-live-chat-text-message-renderer #message'
+      ];
+      let messages = [];
+      for (const selector of selectors) {
+        messages = document.querySelectorAll(selector);
+        if (messages.length > 0) break;
+      }
+      if (!messages.length) return;
+      messages.forEach((msg) => {
+        // Only rescan messages that still contain tokens and no bh-emote yet
+        if (msg.querySelector('.bh-emote')) return;
+        const text = msg.textContent || '';
+        this.tokenRegex && (this.tokenRegex.lastIndex = 0);
+        if (this.tokenRegex && this.tokenRegex.test(text)) {
+          this.transformMessage(msg);
+        }
+      });
+    } catch (_) {}
   }
 
   startObserver() {
@@ -79,20 +123,22 @@ class BeeHappyEmoteReplacer {
     }
     
     this.observer = new MutationObserver((mutations) => {
-      let hasNewMessages = false;
-      
+      let touched = false;
       mutations.forEach(mutation => {
         mutation.addedNodes.forEach(node => {
-          if (node.nodeType === 1 && 
-              (node.tagName === 'YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER' || 
-               node.querySelector && node.querySelector('yt-live-chat-text-message-renderer'))) {
-            hasNewMessages = true;
+          if (node.nodeType !== 1) return;
+          if (node.tagName === 'YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER') {
+            const msg = node.querySelector('#message') || node.querySelector('.message');
+            if (msg) { this.transformMessage(msg); touched = true; }
+          } else {
+            const inner = node.querySelector && (node.querySelector('yt-live-chat-text-message-renderer #message') || node.querySelector('yt-live-chat-text-message-renderer .message'));
+            if (inner) { this.transformMessage(inner); touched = true; }
           }
         });
       });
-      
-      if (hasNewMessages) {
-        this.replaceEmotes();
+      // Periodically rescan existing messages that might have been re-hydrated
+      if (touched) {
+        setTimeout(() => this.rescanExisting(), 200);
       }
     });
 
@@ -101,8 +147,9 @@ class BeeHappyEmoteReplacer {
       subtree: true
     });
 
-    // Process existing messages
+    // Process existing and schedule rescans to catch rehydration
     this.replaceEmotes();
+    setInterval(() => this.rescanExisting(), 2000);
   }
 
   init() {
