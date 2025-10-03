@@ -1,15 +1,7 @@
 // BeeHappy YouTube Chat Emote Replacer
 class BeeHappyEmoteReplacer {
   constructor() {
-    this.emoteMap = {
-      '[bh:poggers]': '🎮POGGERS🎮',
-      '[bh:kappa]': '⚡KAPPA⚡',
-      '[bh:lul]': '😂LUL😂',
-      '[bh:pepe]': '😢PEPE😢',
-      // Vietnamese test emotes
-      '[bh:quay_đều]': '🎮QUAY ĐỀU🎮',
-      '[bh:độ_mixi]': '⚡ĐỘ MIXI⚡'
-    };
+    this.emoteMap = window.BeeHappyEmotes?.getMap() || {};
     this.observer = null;
     this.isProcessing = false;
 
@@ -17,6 +9,14 @@ class BeeHappyEmoteReplacer {
     const escapeToken = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const parts = Object.keys(this.emoteMap).map(escapeToken);
     this.tokenRegex = parts.length ? new RegExp(parts.join('|'), 'g') : null;
+
+    // Subscribe for future updates (e.g., API refresh)
+    window.BeeHappyEmotes?.onUpdate((map, regex) => {
+      this.emoteMap = map;
+      this.tokenRegex = regex;
+      // Re-scan messages on map update
+      this.rescanExisting();
+    });
   }
 
   replaceEmotes() {
@@ -153,7 +153,15 @@ class BeeHappyEmoteReplacer {
   }
 
   init() {
-    setTimeout(() => this.startObserver(), 3000);
+    const start = async () => {
+      await (window.BeeHappyEmotes?.init?.() || Promise.resolve());
+      this.emoteMap = window.BeeHappyEmotes?.getMap() || this.emoteMap;
+      this.tokenRegex = window.BeeHappyEmotes?.getRegex() || this.tokenRegex;
+      this.startObserver();
+      // Optionally kick an early refresh (non-blocking)
+      window.BeeHappyEmotes?.refreshFromApi?.();
+    };
+    setTimeout(start, 1000);
   }
 }
 

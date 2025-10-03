@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <style>
@@ -21,7 +22,7 @@
             --text-secondary: #A1A1AA;
             --text-muted: #71717A;
         }
-        
+
         .visually-hidden {
             position: absolute;
             width: 1px;
@@ -49,7 +50,7 @@
             flex-direction: column;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
         }
-        
+
         .overlay-header {
             background: #000000;
             color: var(--text-primary);
@@ -62,18 +63,18 @@
             user-select: none;
             border-bottom: 1px solid var(--dark-border);
         }
-        
+
         .overlay-title {
             font-weight: 600;
             font-size: 14px;
             color: var(--text-primary);
         }
-        
+
         .overlay-controls {
             display: flex;
             gap: 6px;
         }
-        
+
         .control-btn {
             width: 24px;
             height: 24px;
@@ -89,13 +90,13 @@
             color: var(--text-primary);
             transition: all 0.15s ease;
         }
-        
+
         .minimize-btn:hover {
             background: var(--dark-hover);
             color: var(--secondary);
             border-color: var(--secondary);
         }
-        
+
         .close-btn:hover {
             background: var(--dark-hover);
             color: var(--accent);
@@ -109,7 +110,8 @@
             border-color: var(--primary);
         }
 
-        .emote-btn:hover, .emote-btn.active {
+        .emote-btn:hover,
+        .emote-btn.active {
             background: var(--dark-hover);
             color: var(--primary);
             border-color: var(--primary);
@@ -205,6 +207,10 @@
             gap: 8px;
         }
 
+        .hidden {
+            display: none;
+        }
+
         .emote-item {
             aspect-ratio: 1;
             padding: 4px;
@@ -227,7 +233,7 @@
             height: 100%;
             object-fit: contain;
         }
-        
+
         .chat-container {
             flex: 1;
             overflow-y: auto;
@@ -237,7 +243,7 @@
             gap: 8px;
             background: var(--dark-bg);
         }
-        
+
         .chat-message {
             display: flex;
             flex-direction: column;
@@ -248,11 +254,11 @@
             border-radius: 8px;
             transition: background 0.15s ease;
         }
-        
+
         .chat-message:hover {
             background: var(--dark-hover);
         }
-        
+
         .message-author {
             font-size: 12px;
             font-weight: 600;
@@ -261,7 +267,7 @@
             align-items: center;
             gap: 6px;
         }
-        
+
         .message-author::before {
             content: '';
             width: 14px;
@@ -271,7 +277,7 @@
             flex-shrink: 0;
             opacity: 0.8;
         }
-        
+
         .message-content {
             font-size: 13px;
             color: var(--text-primary);
@@ -279,7 +285,7 @@
             word-wrap: break-word;
             margin-left: 20px;
         }
-        
+
         .overlay-footer {
             padding: 12px 16px;
             background: var(--dark-bg);
@@ -289,14 +295,15 @@
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .footer-controls {
             display: flex;
             gap: 6px;
-            position: relative; /* Anchor for absolute-positioned picker */
+            position: relative;
+            /* Anchor for absolute-positioned picker */
             align-items: center;
         }
-        
+
         .status-indicator {
             font-size: 12px;
             color: var(--text-muted);
@@ -304,7 +311,7 @@
             align-items: center;
             gap: 6px;
         }
-        
+
         .status-dot {
             width: 6px;
             height: 6px;
@@ -312,34 +319,34 @@
             border-radius: 50%;
             opacity: 0.8;
         }
-        
+
         .chat-container::-webkit-scrollbar {
             width: 4px;
         }
-        
+
         .chat-container::-webkit-scrollbar-track {
             background: var(--dark-bg);
         }
-        
+
         .chat-container::-webkit-scrollbar-thumb {
             background: var(--dark-border);
             border-radius: 2px;
         }
-        
+
         .chat-container::-webkit-scrollbar-thumb:hover {
             background: var(--primary);
         }
-        
+
         .overlay-minimized {
             height: 48px;
             width: 220px;
         }
-        
+
         .overlay-minimized .chat-container,
         .overlay-minimized .overlay-footer {
             display: none;
         }
-        
+
         .no-messages {
             text-align: center;
             color: var(--text-muted);
@@ -348,73 +355,66 @@
         }
     </style>
 </head>
+
 <body>
     <div class="beehappy-overlay" id="beeHappyOverlay">
         <div class="overlay-header" id="overlayHeader">
             <div class="overlay-title">BeeHappy Chat</div>
             <div class="overlay-controls">
-                <button class="control-btn minimize-btn" id="minimizeBtn" title="Minimize" aria-label="Minimize overlay">−</button>
-                <button class="control-btn" id="testBtn" title="Force Test" aria-label="Test overlay" style="background:#3cb371;color:#fff;">●</button>
+                <button class="control-btn minimize-btn" id="minimizeBtn" title="Minimize"
+                    aria-label="Minimize overlay">−</button>
+                <button class="control-btn" id="testBtn" title="Force Test" aria-label="Test overlay"
+                    style="background:#3cb371;color:#fff;">●</button>
                 <button class="control-btn close-btn" id="closeBtn" title="Close" aria-label="Close overlay">×</button>
             </div>
         </div>
-        
+
         <div class="chat-container" id="chatContainer" role="log" aria-label="Chat messages">
             <div class="no-messages">Waiting for chat messages...</div>
         </div>
-        
+
         <div class="overlay-footer">
             <div class="status-indicator" role="status">
                 <div class="status-dot"></div>
                 <span>Monitoring YouTube chat</span>
             </div>
             <div class="footer-controls">
-                <button class="control-btn emote-btn" id="emoteBtn" title="Emote Picker" aria-label="Open emote picker" onclick="window.beeHappyEmotePicker?.togglePicker()">😊</button>
+                <button class="control-btn emote-btn" id="emoteBtn" title="Emote Picker" aria-label="Open emote picker"
+                    onclick="window.beeHappyEmotePicker?.togglePicker()">😊</button>
 
                 <!-- Emote Picker Panel (anchored to footer-controls) -->
                 <div class="emote-picker" id="emotePicker" role="dialog" aria-label="Emote picker">
                     <div class="picker-header">
                         <label for="emoteSearchInput" class="visually-hidden">Search Emotes</label>
-                        <input type="text" 
-                               class="picker-search" 
-                               placeholder="Search emotes..." 
-                               id="emoteSearchInput"
-                               name="emoteSearch"
-                               aria-label="Search emotes"
-                               autocomplete="off">
+                        <input type="text" class="picker-search" placeholder="Search emotes..." id="emoteSearchInput"
+                            name="emoteSearch" aria-label="Search emotes" autocomplete="off">
                     </div>
                     <div class="picker-tabs" role="tablist" aria-label="Emote categories">
-                        <button class="picker-tab active" 
-                                role="tab" 
-                                aria-selected="true" 
-                                aria-controls="youtube-emotes" 
-                                id="youtube-tab" 
-                                data-tab="youtube">
+                        <button class="picker-tab active" role="tab" aria-selected="true" aria-controls="youtube-emotes"
+                            id="youtube-tab" data-tab="youtube">
                             YouTube
                         </button>
-                        <button class="picker-tab" 
-                                role="tab" 
-                                aria-selected="false" 
-                                aria-controls="beehappy-emotes" 
-                                id="beehappy-tab" 
-                                data-tab="beehappy">
+                        <button class="picker-tab" role="tab" aria-selected="false" aria-controls="beehappy-emotes"
+                            id="beehappy-tab" data-tab="beehappy">
                             BeeHappy
                         </button>
                     </div>
                     <div class="picker-content">
-                        <div class="emote-grid" 
-                             id="emoteGrid"
-                             role="tabpanel"
-                             aria-labelledby="youtube-tab">
-                            <!-- Emotes will be loaded here -->
+                        <div class="emote-grid" id="emoteGridYoutube" role="tabpanel" aria-labelledby="youtube-tab">
+                            <!-- YouTube emotes will be loaded here -->
+                        </div>
+                        <div class="emote-grid hidden" id="emoteGridBeeHappy" role="tabpanel"
+                            aria-labelledby="beehappy-tab">
+                            <!-- BeeHappy emotes will be loaded here -->
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        
+
     </div>
 
 </body>
+
 </html>

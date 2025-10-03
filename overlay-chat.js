@@ -93,22 +93,10 @@ class BeeHappyOverlayChat {
         this.messageCount = 0;
         this.maxMessages = 50; // Limit messages to prevent memory issues
 
-        // Emote mapping using new [bh:name] syntax
-        this.emoteMap = {
-            '[bh:poggers]': '🎮',
-            '[bh:kappa]': '⚡',
-            '[bh:lul]': '😂',
-            '[bh:pepe]': '😢',
-            '[bh:pog]': '🔥',
-            '[bh:omegalul]': '🤣',
-            '[bh:sadge]': '😭',
-            '[bh:monkas]': '😰',
-            // Vietnamese test emotes
-            '[bh:test]': '🎮',
-            '[bh:emote]': '⚡',
-            '[bh:fire]': '🔥',
-            '[bh:smile]': '😊'
-        };
+        // Centralized emote maps
+        this.emoteMap = (window.BeeHappyEmotes && window.BeeHappyEmotes.getMap()) || {};
+        this.emoteRegex = (window.BeeHappyEmotes && window.BeeHappyEmotes.getRegex && window.BeeHappyEmotes.getRegex()) || null;
+        this.emoteImageMap = {};
 
         this.init();
     }
@@ -116,6 +104,24 @@ class BeeHappyOverlayChat {
     async init() {
         console.log('🐝 Initializing BeeHappy Overlay Chat...');
         await this.createOverlay();
+        // Ensure emote map is ready, and subscribe to updates
+        if (window.BeeHappyEmotes?.init) {
+            await window.BeeHappyEmotes.init();
+            this.emoteMap = window.BeeHappyEmotes.getMap();
+            this.emoteRegex = window.BeeHappyEmotes.getRegex();
+            // Build token->url map from centralized list
+            const list = window.BeeHappyEmotes.getList ? window.BeeHappyEmotes.getList() : [];
+            this.emoteImageMap = Array.isArray(list)
+                ? list.reduce((acc, it) => { if (it && it.token) acc[it.token] = it.url || ''; return acc; }, {})
+                : {};
+            window.BeeHappyEmotes.onUpdate((map, regex, updatedList) => {
+                this.emoteMap = map || {};
+                this.emoteRegex = regex || null;
+                if (Array.isArray(updatedList)) {
+                    this.emoteImageMap = updatedList.reduce((acc, it) => { if (it && it.token) acc[it.token] = it.url || ''; return acc; }, {});
+                }
+            });
+        }
         this.setupEventListeners();
         this.startChatMonitoring();
     }
@@ -152,10 +158,11 @@ class BeeHappyOverlayChat {
                 // Wait for overlay elements to be ready
                 const emotePicker = document.getElementById('emotePicker');
                 const emoteSearch = document.getElementById('emoteSearchInput');
-                const emoteGrid = document.getElementById('emoteGrid');
+                const emoteGridYt = document.getElementById('emoteGridYoutube');
+                const emoteGridBh = document.getElementById('emoteGridBeeHappy');
                 const pickerTabs = document.querySelectorAll('.picker-tab');
 
-                if (!emotePicker || !emoteSearch || !emoteGrid || !pickerTabs.length) {
+                if (!emotePicker || !emoteSearch || !(emoteGridYt && emoteGridBh) || !pickerTabs.length) {
                     console.log('🐝 Waiting for emote picker elements...');
                     setTimeout(initEmotePicker, 50); // Reduced delay
                     return;
@@ -164,31 +171,26 @@ class BeeHappyOverlayChat {
                 // Ensure picker starts hidden
                 emotePicker.classList.remove('visible');
 
-                // Load emote picker config script first
-                const configScript = document.createElement('script');
-                configScript.src = chrome.runtime.getURL('emote-picker-config.js');
-                configScript.id = 'beehappy-emote-picker-config';
-                configScript.onload = () => {
-                    // Load emote picker script after config is loaded
+                // Config is already included as a content script; avoid double-injecting.
+                // Only inject the picker logic once.
+                if (!document.getElementById('beehappy-emote-picker')) {
                     const emotePickerScript = document.createElement('script');
                     emotePickerScript.src = chrome.runtime.getURL('emote-picker.js');
                     emotePickerScript.id = 'beehappy-emote-picker';
                     emotePickerScript.onload = () => {
-                        console.log('🐝 Emote picker scripts loaded');
-                        // Retry initialization after a short delay to ensure overlay is ready
+                        console.log('🐝 Emote picker script loaded');
                         setTimeout(() => {
-                            if (window.beeHappyEmotePicker) {
-                                window.beeHappyEmotePicker.retryInit();
-                            }
+                            try { window.beeHappyEmotePicker?.retryInit?.(); } catch(_){ }
                         }, 200);
                     };
                     document.head.appendChild(emotePickerScript);
-                };
-                document.head.appendChild(configScript);
+                } else {
+                    console.log('🐝 Emote picker already present, skipping injection');
+                    setTimeout(() => {
+                        try { window.beeHappyEmotePicker?.retryInit?.(); } catch(_){ }
+                    }, 200);
+                }
             };
-
-            // Start initialization
-            initEmotePicker();
 
             // Extract the overlay element
             this.overlay = tempDiv.querySelector('.beehappy-overlay');
@@ -213,6 +215,9 @@ class BeeHappyOverlayChat {
 
             // Load saved position
             this.loadPosition();
+
+            // Now that overlay is in the DOM, start picker initialization
+            initEmotePicker();
 
         } catch (error) {
             console.error('🐝 Error creating overlay:', error);
@@ -482,48 +487,62 @@ class BeeHappyOverlayChat {
         const wrapper = document.createElement('span');
         wrapper.style.whiteSpace = 'pre-wrap';
 
+        const replaceTextWithNodes = (text) => {
+            if (!text) return document.createTextNode('');
+            const frag = document.createDocumentFragment();
+            let last = 0;
+            if (!this.emoteRegex) {
+                frag.appendChild(document.createTextNode(text));
+                return frag;
+            }
+            this.emoteRegex.lastIndex = 0;
+            let m;
+            while ((m = this.emoteRegex.exec(text)) !== null) {
+                const start = m.index;
+                const end = start + m[0].length;
+                if (start > last) frag.appendChild(document.createTextNode(text.slice(last, start)));
+                const token = m[0];
+                const url = this.emoteImageMap[token] || '';
+                if (url) {
+                    const img = document.createElement('img');
+                    img.className = 'yt-emoji';
+                    img.setAttribute('alt', token);
+                    img.setAttribute('src', url);
+                    img.setAttribute('loading', 'lazy');
+                    img.style.width = '20px';
+                    img.style.height = '20px';
+                    img.style.verticalAlign = 'middle';
+                    frag.appendChild(img);
+                } else {
+                    // fallback to text map (emoji) if available
+                    const mapped = this.emoteMap[token];
+                    frag.appendChild(document.createTextNode(mapped || token));
+                }
+                last = end;
+            }
+            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+            return frag;
+        };
+
         // Process each node
         Array.from(container.childNodes).forEach(node => {
             if (node.nodeType === Node.TEXT_NODE) {
-                // Process text nodes for [bh:name] emotes
-                let text = node.textContent;
-                for (const [pattern, emoji] of Object.entries(this.emoteMap)) {
-                    const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                    text = text.replace(regex, emoji);
-                }
-                const span = document.createElement('span');
-                span.textContent = text;
-                wrapper.appendChild(span);
+                wrapper.appendChild(replaceTextWithNodes(node.textContent));
             } else if (node.nodeType === Node.ELEMENT_NODE) {
                 if (node.tagName === 'IMG' && (node.classList.contains('emoji') || node.classList.contains('yt-emoji'))) {
-                    // Preserve YouTube emoji images
                     const clone = node.cloneNode(true);
                     clone.classList.add('yt-emoji');
-                    // Ensure src attribute is preserved
-                    if (clone.src) {
-                        clone.setAttribute('src', clone.src);
-                    }
+                    if (clone.src) clone.setAttribute('src', clone.src);
                     wrapper.appendChild(clone);
                 } else {
-                    // Handle nested emoji elements
                     const emojiImg = node.querySelector('img.emoji');
                     if (emojiImg) {
                         const clone = emojiImg.cloneNode(true);
                         clone.classList.add('yt-emoji');
-                        if (clone.src) {
-                            clone.setAttribute('src', clone.src);
-                        }
+                        if (clone.src) clone.setAttribute('src', clone.src);
                         wrapper.appendChild(clone);
                     } else {
-                        // Process text content for other elements
-                        const span = document.createElement('span');
-                        let text = node.textContent;
-                        for (const [pattern, emoji] of Object.entries(this.emoteMap)) {
-                            const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                            text = text.replace(regex, emoji);
-                        }
-                        span.textContent = text;
-                        wrapper.appendChild(span);
+                        wrapper.appendChild(replaceTextWithNodes(node.textContent));
                     }
                 }
             }

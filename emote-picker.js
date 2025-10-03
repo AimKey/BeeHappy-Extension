@@ -6,10 +6,11 @@ class BeeHappyEmotePicker {
             beehappy: []
         };
         this.searchTerm = '';
-        this.maxRetries = 10; // Maximum number of retries for initialization
+        this.maxRetries = 30; // Maximum number of retries for initialization
         this.retryCount = 0;
         this.initialized = false;
-        
+        this.beeHappyRefreshedOnce = false;
+
         // Common emoji list for YouTube tab
         this.youtubeEmojis = [
             '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌',
@@ -33,18 +34,20 @@ class BeeHappyEmotePicker {
                     chrome: typeof chrome !== 'undefined' ? chrome : null,
                     runtime: typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime : null,
                     initialized: true,
-                    apiUrl: 'https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/Emote'
+                    apiUrl: 'https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/api/emotes'
                 };
             }
 
             // Get elements
             this.picker = document.getElementById('emotePicker');
             this.searchInput = document.getElementById('emoteSearchInput');
-            this.emoteGrid = document.getElementById('emoteGrid');
+            // Two dedicated grids (one per tab)
+            this.emoteGridYoutube = document.getElementById('emoteGridYoutube');
+            this.emoteGridBeeHappy = document.getElementById('emoteGridBeeHappy');
             this.tabs = document.querySelectorAll('.picker-tab');
 
             // Wait for elements to be ready
-            if (!this.picker || !this.searchInput || !this.emoteGrid || !this.tabs.length) {
+            if (!this.picker || !this.searchInput || !this.emoteGridYoutube || !this.emoteGridBeeHappy || !this.tabs.length) {
                 if (this.retryCount >= this.maxRetries) {
                     console.warn('🐝 Element initialization timeout, will retry later');
                     // Don't throw error, just return and let it retry when overlay is ready
@@ -57,7 +60,7 @@ class BeeHappyEmotePicker {
                     tabs: this.tabs.length
                 });
                 this.retryCount++;
-                setTimeout(() => this.init(), 100); // Slightly longer delay
+                setTimeout(() => this.init(), 1000); // Slightly longer delay
                 return;
             }
 
@@ -70,16 +73,23 @@ class BeeHappyEmotePicker {
                 console.log('🐝 Search input:', this.searchInput);
                 console.log('🐝 Emote grid:', this.emoteGrid);
                 console.log('🐝 Tabs:', this.tabs);
-                
+
                 // Set up the picker
                 await this.setupPicker();
             }
         } catch (error) {
             console.error('🐝 Initialization error:', error);
-            // Still try to set up with default emotes if possible
-            if (!this.initialized && this.picker) {
-                this.initialized = true;
-                await this.setupPicker();
+            // Retry until the max retries is reached
+            if (this.retryCount < this.maxRetries) {
+                this.retryCount++;
+                console.log(`🐝 Retrying initialization (${this.retryCount}/${this.maxRetries})...`);
+                setTimeout(() => this.init(), 500);
+            } else {
+                // Still try to set up with default emotes if possible
+                if (!this.initialized && this.picker) {
+                    this.initialized = true;
+                    await this.setupPicker();
+                }
             }
         }
     }
@@ -87,16 +97,46 @@ class BeeHappyEmotePicker {
     async setupPicker() {
         // Ensure picker starts hidden
         this.picker.classList.remove('visible');
-        
+
         // Add ARIA attributes for accessibility
         this.tabs.forEach((tab, index) => {
             tab.setAttribute('role', 'tab');
             tab.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
-            tab.setAttribute('id', `emote-tab-${tab.dataset.tab}`);
+            // Keep original IDs from HTML (youtube-tab / beehappy-tab)
         });
 
         this.setupEventListeners();
+        // Ensure centralized emote map is ready and subscribe to updates
+        try { await window.BeeHappyEmotes?.init?.(); } catch (_) { }
+        // Subscribe so the picker updates whenever the backend fetch completes
+        window.BeeHappyEmotes?.onUpdate?.((map, regex, list) => {
+            console.log('🐝 [Picker] onUpdate received list:', Array.isArray(list) ? list : []);
+            // If the list is empty don't update
+            if (!Array.isArray(list) || list.length === 0) {
+                console.warn('🐝 [Picker] onUpdate received empty list, skipping update');
+                return;
+            }
+
+            if (Array.isArray(list)) {
+                this.updateBeeHappyFromList(list);
+                // Pre-populate BeeHappy grid once data arrives
+                this.renderInto('beehappy');
+                if (this.currentTab === 'beehappy') this.renderEmotes();
+            }
+        });
+
         await this.loadEmotes();
+        // Preload both grids so switching tabs is instant
+        this.renderInto('youtube');
+        this.renderInto('beehappy');
+        // Ensure initial tab visibility and content
+        const yt = this.emoteGridYoutube;
+        const bh = this.emoteGridBeeHappy;
+        if (yt && bh) {
+            yt.classList.remove('hidden');
+            bh.classList.add('hidden');
+        }
+        this.currentTab = 'youtube';
         this.renderEmotes();
     }
 
@@ -120,15 +160,25 @@ class BeeHappyEmotePicker {
                 // Add active class to clicked tab
                 tab.classList.add('active');
                 tab.setAttribute('aria-selected', 'true');
-                
+
                 this.currentTab = tab.dataset.tab;
-                this.renderEmotes();
-                
+
                 // Update tabpanel
-                const emoteGrid = document.getElementById('emoteGrid');
-                if (emoteGrid) {
-                    emoteGrid.setAttribute('aria-labelledby', `${tab.dataset.tab}-tab`);
+                const yt = this.emoteGridYoutube;
+                const bh = this.emoteGridBeeHappy;
+                if (yt && bh) {
+                    if (this.currentTab === 'youtube') {
+                        yt.classList.remove('hidden');
+                        bh.classList.add('hidden');
+                        yt.setAttribute('aria-labelledby', 'youtube-tab');
+                    } else {
+                        bh.classList.remove('hidden');
+                        yt.classList.add('hidden');
+                        bh.setAttribute('aria-labelledby', 'beehappy-tab');
+                    }
                 }
+
+                // No auto-fetch on switch; grids are preloaded
             });
         });
 
@@ -151,35 +201,20 @@ class BeeHappyEmotePicker {
                 type: 'youtube'
             }));
 
-            // Then try to load BeeHappy emotes through background script
-            if (this.config?.runtime && typeof this.config.runtime.sendMessage === 'function') {
-                try {
-                    const response = await this.config.runtime.sendMessage({ 
-                        action: 'fetch_emotes',
-                        url: this.config.apiUrl
-                    });
-                    
-                    if (response?.success && Array.isArray(response.data)) {
-                        this.emotes.beehappy = response.data.map(emote => ({
-                            id: emote.id || '',
-                            name: emote.name || `[bh:${emote.id || 'unknown'}]`,
-                            url: emote.url || '',
-                            type: 'beehappy'
-                        }));
-                    } else {
-                        throw new Error('Invalid response from API');
-                    }
-                } catch (error) {
-                    console.warn('🐝 Failed to fetch BeeHappy emotes via runtime:', error);
-                    throw error;
-                }
-            } else {
-                throw new Error('Runtime not available');
+            // Then load BeeHappy emotes from centralized list
+            const list = window.BeeHappyEmotes?.getList?.() || [];
+            console.log('🐝 [Picker] initial BeeHappy list:', list);
+            this.updateBeeHappyFromList(list);
+
+            if (!list.length && !this.beeHappyRefreshedOnce) {
+                this.beeHappyRefreshedOnce = true;
+                try { await window.BeeHappyEmotes?.refreshFromApi?.(); } catch (_) { }
+                console.log('🐝 [Picker] refreshFromApi triggered');
             }
         } catch (error) {
             console.warn('🐝 Error loading BeeHappy emotes:', error);
             console.info('🐝 Using default emotes as fallback');
-            
+
             // Set some default emotes if API fails
             this.emotes.beehappy = [
                 { id: 'poggers', name: '[bh:poggers]', type: 'beehappy' },
@@ -192,20 +227,48 @@ class BeeHappyEmotePicker {
         }
     }
 
-    renderEmotes() {
-        if (!this.emoteGrid) return;
+    renderInto(tab) {
+        const prev = this.currentTab;
+        this.currentTab = tab;
+        this.renderEmotes();
+        this.currentTab = prev;
+    }
 
-        const emotes = this.emotes[this.currentTab];
+    updateBeeHappyFromList(list) {
+        if (!Array.isArray(list)) return;
+        console.log('🐝 [Picker] mapping list to emotes:', list);
+        this.emotes.beehappy = list.map(item => ({
+            id: item.token,
+            name: item.token, // use token as the value we copy
+            url: item.url || '',
+            type: 'beehappy',
+            label: item.name || item.token
+        }));
+    }
+
+    // ensureBeeHappyList removed – grids are preloaded and updated via onUpdate
+
+    renderEmotes() {
+        const grid = this.currentTab === 'youtube' ? this.emoteGridYoutube : this.emoteGridBeeHappy;
+        if (!grid) {
+            console.warn('🐝 [Picker] renderEmotes: emoteGrid not ready');
+            return;
+        }
+
+        const emotes = this.emotes[this.currentTab] || [];
+        console.log('🐝 [Picker] renderEmotes tab=', this.currentTab, 'count=', emotes.length);
         const filteredEmotes = this.searchTerm
-            ? emotes.filter(emote => 
+            ? emotes.filter(emote =>
                 emote.name.toLowerCase().includes(this.searchTerm) ||
                 (emote.id && emote.id.toLowerCase().includes(this.searchTerm)))
             : emotes;
 
-        // Create elements safely using document fragment
-        const fragment = document.createDocumentFragment();
+        console.log('🐝 [Picker] renderEmotes filtered count=', filteredEmotes.length);
 
-        filteredEmotes.forEach(emote => {
+        // Create elements using the same ownerDocument as the target grid
+        const fragment = (grid?.ownerDocument || document).createDocumentFragment();
+
+        emotes.forEach(emote => {
             const emoteElement = document.createElement('div');
             emoteElement.className = 'emote-item';
             emoteElement.setAttribute('title', emote.name);
@@ -222,11 +285,20 @@ class BeeHappyEmotePicker {
                     img.setAttribute('src', emote.url);
                     img.setAttribute('alt', emote.name);
                     img.setAttribute('loading', 'lazy');
+                    img.setAttribute('width', '32');
+                    img.setAttribute('height', '32');
+                    img.style.maxWidth = '32px';
+                    img.style.maxHeight = '32px';
+                    img.style.display = 'block';
                     emoteElement.appendChild(img);
-                } else {
-                    const textNode = document.createTextNode(emote.name);
-                    emoteElement.appendChild(textNode);
                 }
+                // Always show a small label under image or text
+                const label = document.createElement('div');
+                label.style.fontSize = '10px';
+                label.style.marginTop = '4px';
+                label.style.opacity = '0.8';
+                label.textContent = emote.label || emote.name;
+                // emoteElement.appendChild(label);
             }
 
             emoteElement.addEventListener('click', () => this.selectEmote(emote));
@@ -234,10 +306,11 @@ class BeeHappyEmotePicker {
         });
 
         // Clear and update grid safely
-        while (this.emoteGrid.firstChild) {
-            this.emoteGrid.removeChild(this.emoteGrid.firstChild);
+        while (grid.firstChild) {
+            grid.removeChild(grid.firstChild);
         }
-        this.emoteGrid.appendChild(fragment);
+        grid.appendChild(fragment);
+        console.log('🐝 [Picker] renderEmotes appended nodes, grid children=', grid.childElementCount);
     }
 
     async selectEmote(emote) {
@@ -257,7 +330,7 @@ class BeeHappyEmotePicker {
                 document.body.appendChild(ta);
                 ta.focus();
                 ta.select();
-                try { document.execCommand('copy'); } catch (_) {}
+                try { document.execCommand('copy'); } catch (_) { }
                 ta.remove();
                 console.log('🐝 Copied emote to clipboard (fallback):', textToCopy);
             }
@@ -275,7 +348,7 @@ class BeeHappyEmotePicker {
             console.error('🐝 Picker element not found');
             return;
         }
-        
+
         const isVisible = this.picker.classList.contains('visible');
         console.log('🐝 Picker currently visible:', isVisible);
         if (isVisible) {
@@ -293,20 +366,20 @@ class BeeHappyEmotePicker {
             console.error('🐝 Picker element not found in showPicker');
             return;
         }
-        
+
         // Simply add the visible class
         this.picker.classList.add('visible');
         console.log('🐝 Picker classes after show:', this.picker.className);
-        
+
         // Ensure picker stays within viewport
         this.adjustPickerPosition();
-        
+
         const emoteBtn = document.getElementById('emoteBtn');
         if (emoteBtn) {
             emoteBtn.classList.add('active');
             console.log('🐝 Emote button set to active');
         }
-        
+
         // Focus the search input when picker opens
         if (this.searchInput) {
             setTimeout(() => this.searchInput.focus(), 100);
@@ -315,11 +388,11 @@ class BeeHappyEmotePicker {
 
     adjustPickerPosition() {
         if (!this.picker) return;
-        
+
         const rect = this.picker.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
         const viewportWidth = window.innerWidth;
-        
+
         // If picker goes above viewport, position it below the button instead
         if (rect.top < 0) {
             this.picker.style.bottom = 'auto';
@@ -335,7 +408,7 @@ class BeeHappyEmotePicker {
             this.picker.style.marginBottom = '8px';
             this.picker.style.borderRadius = '12px';
         }
-        
+
         // If picker goes off the right edge, adjust right position
         if (rect.right > viewportWidth) {
             this.picker.style.right = '0';
@@ -346,16 +419,16 @@ class BeeHappyEmotePicker {
     hidePicker() {
         console.log('🐝 hidePicker() called from:', new Error().stack);
         if (!this.picker) return;
-        
+
         // Simply remove the visible class
         this.picker.classList.remove('visible');
         console.log('🐝 Picker hidden, classes:', this.picker.className);
-        
+
         const emoteBtn = document.getElementById('emoteBtn');
         if (emoteBtn) {
             emoteBtn.classList.remove('active');
         }
-        
+
         // Clear search when hiding
         if (this.searchInput) {
             this.searchInput.value = '';
@@ -363,23 +436,6 @@ class BeeHappyEmotePicker {
         }
     }
 
-    // Test method to verify toggle works
-    testToggle() {
-        console.log('🐝 Testing toggle function...');
-        console.log('🐝 Picker element:', this.picker);
-        console.log('🐝 Picker display style:', this.picker ? this.picker.style.display : 'N/A');
-        console.log('🐝 Picker classes:', this.picker ? this.picker.className : 'N/A');
-        this.togglePicker();
-    }
-
-    // Method to manually trigger initialization when overlay is ready
-    retryInit() {
-        console.log('🐝 Manually retrying initialization...');
-        this.retryCount = 0; // Reset retry count
-        this.init();
-    }
-
-    // Cleanup method removed - no longer needed with HTML onclick
 }
 
 // Initialize when the document is ready
