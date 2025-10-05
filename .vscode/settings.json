@@ -1,0 +1,15 @@
+{
+  "eslint.validate": ["javascript"],
+  "eslint.options": {
+    "extensions": [".js"]
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "javascript.validate.enable": true,
+  "typescript.validate.enable": false,
+  "editor.formatOnSave": true,
+  "files.associations": {
+    "*.js": "javascript"
+  }
+}

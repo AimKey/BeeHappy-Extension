@@ -1,457 +1,611 @@
 class BeeHappyEmotePicker {
-    constructor() {
-        this.currentTab = 'youtube';
-        this.emotes = {
-            youtube: [],
-            beehappy: []
-        };
-        this.searchTerm = '';
-        this.maxRetries = 30; // Maximum number of retries for initialization
-        this.retryCount = 0;
-        this.initialized = false;
-        this.beeHappyRefreshedOnce = false;
+  constructor() {
+    this.currentTab = "youtube";
+    this.emotes = {
+      youtube: [],
+      beehappy: [],
+    };
+    this.searchTerm = "";
+    this.maxRetries = 50; // Maximum number of retries for initialization
+    this.retryCount = 0;
+    this.initialized = false;
+    this.beeHappyRefreshedOnce = false;
 
-        // Common emoji list for YouTube tab
-        this.youtubeEmojis = [
-            '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌',
-            '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐',
-            '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
-            '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵',
-            '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐',
-            '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵'
-        ];
+    // Common emoji list for YouTube tab
+    this.youtubeEmojis = [
+      "😀",
+      "😄",
+      "😁",
+      "😅",
+      "😂",
+      "🤣",
+      "😊",
+      "😇",
+      "🙂",
+      "🙃",
+      "😉",
+      "😌",
+      "😍",
+      "🥰",
+      "😘",
+      "😗",
+      "😙",
+      "😚",
+      "😋",
+      "😛",
+      "😝",
+      "😜",
+      "🤪",
+      "🤨",
+      "🧐",
+      "🤓",
+      "😎",
+      "🤩",
+      "🥳",
+      "😏",
+      "😒",
+      "😞",
+      "😔",
+      "😟",
+      "😕",
+      "🙁",
+      "☹️",
+      "😣",
+      "😖",
+      "😩",
+      "🥺",
+      "😢",
+      "😭",
+      "😤",
+      "😠",
+      "😡",
+      "🤬",
+      "🤯",
+      "😳",
+      "🥵",
+      "🥶",
+      "😱",
+      "😨",
+      "😰",
+      "😥",
+      "😓",
+      "🤗",
+      "🤔",
+      "🤭",
+      "🤫",
+      "🤥",
+      "😶",
+      "😐",
+      "😑",
+      "🙄",
+      "😯",
+      "😦",
+      "😧",
+      "😮",
+      "😲",
+      "🥱",
+      "😴",
+      "🤤",
+      "😪",
+      "😵",
+    ];
 
-        // Start initialization
-        this.init();
-    }
+    // Start initialization
+    this.init();
+  }
 
-    async init() {
-        try {
-            // Initialize config if not available
-            if (!window.BeeHappyEmotePickerConfig?.initialized) {
-                console.log('🐝 Initializing config...');
-                window.BeeHappyEmotePickerConfig = {
-                    chrome: typeof chrome !== 'undefined' ? chrome : null,
-                    runtime: typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime : null,
-                    initialized: true,
-                    apiUrl: 'https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/api/emotes'
-                };
-            }
+  async init() {
+    try {
+      // Get elements
+      this.picker = document.getElementById("emotePicker");
+      this.searchInput = document.getElementById("emoteSearchInput");
+      // Two dedicated grids (one per tab)
+      this.emoteGridYoutube = document.getElementById("emoteGridYoutube");
+      this.emoteGridBeeHappy = document.getElementById("emoteGridBeeHappy");
+      this.tabs = document.querySelectorAll(".picker-tab");
+      console.log("🐝 [Picker] Elements found:", document.getElementById("emotePicker"));
 
-            // Get elements
-            this.picker = document.getElementById('emotePicker');
-            this.searchInput = document.getElementById('emoteSearchInput');
-            // Two dedicated grids (one per tab)
-            this.emoteGridYoutube = document.getElementById('emoteGridYoutube');
-            this.emoteGridBeeHappy = document.getElementById('emoteGridBeeHappy');
-            this.tabs = document.querySelectorAll('.picker-tab');
-
-            // Wait for elements to be ready
-            if (!this.picker || !this.searchInput || !this.emoteGridYoutube || !this.emoteGridBeeHappy || !this.tabs.length) {
-                if (this.retryCount >= this.maxRetries) {
-                    console.warn('🐝 Element initialization timeout, will retry later');
-                    // Don't throw error, just return and let it retry when overlay is ready
-                    return;
-                }
-                console.log('🐝 Waiting for elements...', {
-                    picker: !!this.picker,
-                    searchInput: !!this.searchInput,
-                    emoteGrid: !!this.emoteGrid,
-                    tabs: this.tabs.length
-                });
-                this.retryCount++;
-                setTimeout(() => this.init(), 1000); // Slightly longer delay
-                return;
-            }
-
-            // Initialize once everything is ready
-            if (!this.initialized) {
-                this.initialized = true;
-                this.config = window.BeeHappyEmotePickerConfig;
-                console.log('🐝 Emote picker initialized');
-                console.log('🐝 Picker element:', this.picker);
-                console.log('🐝 Search input:', this.searchInput);
-                console.log('🐝 Emote grid:', this.emoteGrid);
-                console.log('🐝 Tabs:', this.tabs);
-
-                // Set up the picker
-                await this.setupPicker();
-            }
-        } catch (error) {
-            console.error('🐝 Initialization error:', error);
-            // Retry until the max retries is reached
-            if (this.retryCount < this.maxRetries) {
-                this.retryCount++;
-                console.log(`🐝 Retrying initialization (${this.retryCount}/${this.maxRetries})...`);
-                setTimeout(() => this.init(), 500);
-            } else {
-                // Still try to set up with default emotes if possible
-                if (!this.initialized && this.picker) {
-                    this.initialized = true;
-                    await this.setupPicker();
-                }
-            }
+      // Wait for elements to be ready
+      while (!this.searchInput || !this.emoteGridYoutube || !this.emoteGridBeeHappy || !this.tabs) {
+        if (this.retryCount >= this.maxRetries) {
+          console.warn("🐝 Element initialization timeout, will retry later");
+          // Don't throw error, just return and let it retry when overlay is ready
+          return;
         }
+        console.log(
+          "🐝 Waiting for elements...",
+          this.picker,
+          this.searchInput,
+          this.emoteGridYoutube,
+          this.emoteGridBeeHappy,
+          this.tabs
+        );
+        this.retryCount++;
+        // Try to get it again
+        this.picker = document.getElementById("emotePicker");
+        this.searchInput = document.getElementById("emoteSearchInput");
+        // Two dedicated grids (one per tab)
+        this.emoteGridYoutube = document.getElementById("emoteGridYoutube");
+        this.emoteGridBeeHappy = document.getElementById("emoteGridBeeHappy");
+        this.tabs = document.querySelectorAll(".picker-tab");
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Slight delay to avoid tight loop
+      }
+
+      console.log("🐝 [Picker] All elements found, proceeding with initialization");
+
+      // Initialize once everything is ready
+      if (!this.initialized) {
+        this.initialized = true;
+        console.log("🐝 Emote picker initialized");
+        console.log("🐝 Picker element:", this.picker);
+        console.log("🐝 Search input:", this.searchInput);
+        console.log("🐝 YouTube emote grid:", this.emoteGridYoutube);
+        console.log("🐝 BeeHappy emote grid:", this.emoteGridBeeHappy);
+        console.log("🐝 Tabs:", this.tabs);
+
+        // Set up the picker
+        await this.setupPicker();
+      }
+    } catch (error) {
+      console.error("🐝 Initialization error:", error);
+      // Retry until the max retries is reached
+      if (this.retryCount < this.maxRetries) {
+        this.retryCount++;
+        console.log(`🐝 Retrying initialization (${this.retryCount}/${this.maxRetries})...`);
+        setTimeout(() => this.init(), 500);
+      } else {
+        // Still try to set up with default emotes if possible
+        if (!this.initialized && this.picker) {
+          this.initialized = true;
+          await this.setupPicker();
+        }
+      }
+    }
+  }
+
+  async setupPicker() {
+    // Ensure picker starts hidden
+    this.picker.classList.remove("visible");
+
+    this.setupEventListeners();
+    // Ensure centralized emote map is ready
+    try {
+      await window.BeeHappyEmotes?.init?.();
+    } catch (_) {}
+
+    // ✅ Subscribe to updates FIRST, before any loading
+    window.BeeHappyEmotes?.onUpdate?.((map, regex, list) => {
+      console.log("🐝 [Picker] onUpdate received list:", list);
+      if (!Array.isArray(list) || list.length === 0) {
+        console.warn("🐝 [Picker] onUpdate received empty list, skipping update");
+        return;
+      }
+
+      if (Array.isArray(list)) {
+        this.updateBeeHappyFromList(list);
+
+        // Pre-populate BeeHappy grid once data arrives
+        this.renderInto("beehappy");
+        console.log("🐝 [Picker] BeeHappy emotes updated via onUpdate");
+      }
+    });
+
+    console.log("🐝 [Picker] Pre-Loading emotes...");
+    await this.loadEmotes();
+    // Preload both grids so switching tabs is instant
+    this.renderInto("youtube");
+    this.renderInto("beehappy");
+    // Ensure initial tab visibility and content
+    const yt = this.emoteGridYoutube;
+    const bh = this.emoteGridBeeHappy;
+    if (yt && bh) {
+      yt.classList.remove("hidden");
+      bh.classList.add("hidden");
+    }
+  }
+
+  setupEventListeners() {
+    // Search input handler
+    if (this.searchInput) {
+      this.searchInput.addEventListener("input", () => {
+        this.searchTerm = this.searchInput.value.toLowerCase();
+        this.renderEmotes();
+      });
     }
 
-    async setupPicker() {
-        // Ensure picker starts hidden
-        this.picker.classList.remove('visible');
-
-        // Add ARIA attributes for accessibility
-        this.tabs.forEach((tab, index) => {
-            tab.setAttribute('role', 'tab');
-            tab.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
-            // Keep original IDs from HTML (youtube-tab / beehappy-tab)
+    // Tab switching
+    this.tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        // Remove active class from all tabs
+        this.tabs.forEach((t) => {
+          t.classList.remove("active");
+          t.setAttribute("aria-selected", "false");
         });
+        // Add active class to clicked tab
+        tab.classList.add("active");
+        tab.setAttribute("aria-selected", "true");
 
-        this.setupEventListeners();
-        // Ensure centralized emote map is ready and subscribe to updates
-        try { await window.BeeHappyEmotes?.init?.(); } catch (_) { }
-        // Subscribe so the picker updates whenever the backend fetch completes
-        window.BeeHappyEmotes?.onUpdate?.((map, regex, list) => {
-            console.log('🐝 [Picker] onUpdate received list:', Array.isArray(list) ? list : []);
-            // If the list is empty don't update
-            if (!Array.isArray(list) || list.length === 0) {
-                console.warn('🐝 [Picker] onUpdate received empty list, skipping update');
-                return;
-            }
+        this.currentTab = tab.dataset.tab;
 
-            if (Array.isArray(list)) {
-                this.updateBeeHappyFromList(list);
-                // Pre-populate BeeHappy grid once data arrives
-                this.renderInto('beehappy');
-                if (this.currentTab === 'beehappy') this.renderEmotes();
-            }
-        });
-
-        await this.loadEmotes();
-        // Preload both grids so switching tabs is instant
-        this.renderInto('youtube');
-        this.renderInto('beehappy');
-        // Ensure initial tab visibility and content
+        // Update tabpanel
         const yt = this.emoteGridYoutube;
         const bh = this.emoteGridBeeHappy;
         if (yt && bh) {
-            yt.classList.remove('hidden');
-            bh.classList.add('hidden');
-        }
-        this.currentTab = 'youtube';
-        this.renderEmotes();
-    }
-
-    setupEventListeners() {
-        // Search input handler
-        if (this.searchInput) {
-            this.searchInput.addEventListener('input', () => {
-                this.searchTerm = this.searchInput.value.toLowerCase();
-                this.renderEmotes();
-            });
+          if (this.currentTab === "youtube") {
+            yt.classList.remove("hidden");
+            bh.classList.add("hidden");
+            yt.setAttribute("aria-labelledby", "youtube-tab");
+          } else {
+            bh.classList.remove("hidden");
+            yt.classList.add("hidden");
+            bh.setAttribute("aria-labelledby", "beehappy-tab");
+          }
         }
 
-        // Tab switching
-        this.tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                // Remove active class from all tabs
-                this.tabs.forEach(t => {
-                    t.classList.remove('active');
-                    t.setAttribute('aria-selected', 'false');
-                });
-                // Add active class to clicked tab
-                tab.classList.add('active');
-                tab.setAttribute('aria-selected', 'true');
+        // No auto-fetch on switch; grids are preloaded
+      });
+    });
 
-                this.currentTab = tab.dataset.tab;
+    // Close picker on escape key - DISABLED per user request
+    // document.addEventListener('keydown', (e) => {
+    //     if (e.key === 'Escape' && this.picker && this.picker.classList.contains('visible')) {
+    //         this.hidePicker();
+    //     }
+    // });
+  }
 
-                // Update tabpanel
-                const yt = this.emoteGridYoutube;
-                const bh = this.emoteGridBeeHappy;
-                if (yt && bh) {
-                    if (this.currentTab === 'youtube') {
-                        yt.classList.remove('hidden');
-                        bh.classList.add('hidden');
-                        yt.setAttribute('aria-labelledby', 'youtube-tab');
-                    } else {
-                        bh.classList.remove('hidden');
-                        yt.classList.add('hidden');
-                        bh.setAttribute('aria-labelledby', 'beehappy-tab');
-                    }
-                }
+  // Event handler attachment removed - now handled directly in HTML
 
-                // No auto-fetch on switch; grids are preloaded
-            });
-        });
+  async loadEmotes() {
+    try {
+      // Load YouTube emojis first (these are local so they'll always work)
+      this.emotes.youtube = this.youtubeEmojis.map((emoji) => ({
+        id: emoji,
+        name: emoji,
+        type: "youtube",
+      }));
 
-        // Close picker on escape key - DISABLED per user request
-        // document.addEventListener('keydown', (e) => {
-        //     if (e.key === 'Escape' && this.picker && this.picker.classList.contains('visible')) {
-        //         this.hidePicker();
-        //     }
-        // });
-    }
+      // Then load BeeHappy emotes from centralized list
+      const list = window.BeeHappyEmotes?.getList?.();
+      // console.log("🐝 [Picker] initial BeeHappy list:", list);
 
-    // Event handler attachment removed - now handled directly in HTML
-
-    async loadEmotes() {
+      if (!list || !list.length) {
         try {
-            // Load YouTube emojis first (these are local so they'll always work)
-            this.emotes.youtube = this.youtubeEmojis.map(emoji => ({
-                id: emoji,
-                name: emoji,
-                type: 'youtube'
-            }));
+          console.log("🐝 [Picker] BeeHappy list empty, triggering refreshFromApi");
+          console.log("🐝 [Picker] BeeHappyEmotes list status:", window.BeeHappyEmotes.list);
+          const result = await window.BeeHappyEmotes.refreshFromApi();
 
-            // Then load BeeHappy emotes from centralized list
-            const list = window.BeeHappyEmotes?.getList?.() || [];
-            console.log('🐝 [Picker] initial BeeHappy list:', list);
-            this.updateBeeHappyFromList(list);
-
-            if (!list.length && !this.beeHappyRefreshedOnce) {
-                this.beeHappyRefreshedOnce = true;
-                try { await window.BeeHappyEmotes?.refreshFromApi?.(); } catch (_) { }
-                console.log('🐝 [Picker] refreshFromApi triggered');
+          // ✅ After API call, get the updated list and update immediately
+          if (result) {
+            const updatedList = window.BeeHappyEmotes.getList();
+            // console.log("🐝 [Picker] BeeHappy list after refresh:", updatedList);
+            if (updatedList && updatedList.length > 0) {
+              this.updateBeeHappyFromList(updatedList);
+              // console.log("🐝 [Picker] BeeHappy emotes loaded directly from API result");
             }
+          }
         } catch (error) {
-            console.warn('🐝 Error loading BeeHappy emotes:', error);
-            console.info('🐝 Using default emotes as fallback');
-
-            // Set some default emotes if API fails
-            this.emotes.beehappy = [
-                { id: 'poggers', name: '[bh:poggers]', type: 'beehappy' },
-                { id: 'kappa', name: '[bh:kappa]', type: 'beehappy' },
-                { id: 'lul', name: '[bh:lul]', type: 'beehappy' },
-                { id: 'pepe', name: '[bh:pepe]', type: 'beehappy' },
-                { id: 'test', name: '[bh:test]', type: 'beehappy' },
-                { id: 'emote', name: '[bh:emote]', type: 'beehappy' }
-            ];
+          console.error("🐝 [Picker] refreshFromApi failed:", error);
         }
+      } else {
+        // ✅ If list already exists, update immediately
+        this.updateBeeHappyFromList(list);
+        console.log("🐝 [Picker] BeeHappy emotes loaded from existing list");
+      }
+    } catch (error) {
+      console.warn("🐝 Error loading BeeHappy emotes:", error);
+    }
+  }
+
+  renderInto(tab) {
+    const prev = this.currentTab;
+    this.currentTab = tab;
+    this.renderEmotes();
+    this.currentTab = prev;
+  }
+
+  updateBeeHappyFromList(list) {
+    console.log("🐝 [Picker] Updating BeeHappy emotes from list:", list);
+    this.emotes.beehappy = list.map((item) => ({
+      id: item.token,
+      name: item.token, // use token as the value we copy
+      url: item.url || "",
+      type: "beehappy",
+      label: item.name || item.token,
+    }));
+    console.log("🐝 [Picker] BeeHappy emotes updated, count=", this.emotes.beehappy.length);
+  }
+
+  // ensureBeeHappyList removed – grids are preloaded and updated via onUpdate
+
+  renderEmotes() {
+    const grid = this.currentTab === "youtube" ? this.emoteGridYoutube : this.emoteGridBeeHappy;
+    console.log("🐝 [Picker] renderEmotes into tab=", this.currentTab, "grid=", grid);
+    if (!grid) {
+      console.warn("🐝 [Picker] renderEmotes: emoteGrid not ready");
+      return;
     }
 
-    renderInto(tab) {
-        const prev = this.currentTab;
-        this.currentTab = tab;
-        this.renderEmotes();
-        this.currentTab = prev;
-    }
+    const emotes = this.emotes[this.currentTab] || [];
+    console.log("🐝 [Picker] Emotes for this tab: ", emotes);
+    const filteredEmotes = this.searchTerm
+      ? emotes.filter(
+          (emote) =>
+            emote.name.toLowerCase().includes(this.searchTerm) ||
+            (emote.id && emote.id.toLowerCase().includes(this.searchTerm))
+        )
+      : emotes;
 
-    updateBeeHappyFromList(list) {
-        if (!Array.isArray(list)) return;
-        console.log('🐝 [Picker] mapping list to emotes:', list);
-        this.emotes.beehappy = list.map(item => ({
-            id: item.token,
-            name: item.token, // use token as the value we copy
-            url: item.url || '',
-            type: 'beehappy',
-            label: item.name || item.token
-        }));
-    }
+    // Create elements using the same ownerDocument as the target grid
+    const fragment = (grid?.ownerDocument || document).createDocumentFragment();
 
-    // ensureBeeHappyList removed – grids are preloaded and updated via onUpdate
+    emotes.forEach((emote) => {
+      // console.log("🐝 [Picker] Loading emote:", emote);
+      const emoteElement = document.createElement("div");
+      emoteElement.className = "emote-item";
+      emoteElement.setAttribute("title", emote.name);
+      emoteElement.setAttribute("role", "button");
+      emoteElement.setAttribute("aria-label", `Select emote ${emote.name}`);
 
-    renderEmotes() {
-        const grid = this.currentTab === 'youtube' ? this.emoteGridYoutube : this.emoteGridBeeHappy;
-        if (!grid) {
-            console.warn('🐝 [Picker] renderEmotes: emoteGrid not ready');
-            return;
+      if (emote.type === "youtube") {
+        const textNode = document.createTextNode(emote.name);
+        emoteElement.appendChild(textNode);
+      } else {
+        // For BeeHappy emotes, create an image if URL exists, otherwise use text
+        if (emote.url) {
+          const img = document.createElement("img");
+          img.setAttribute("src", emote.url);
+          img.setAttribute("alt", emote.name);
+          img.setAttribute("loading", "lazy");
+          img.setAttribute("width", "32");
+          img.setAttribute("height", "32");
+          img.style.maxWidth = "32px";
+          img.style.maxHeight = "32px";
+          img.style.display = "block";
+          emoteElement.appendChild(img);
         }
+        // Always show a small label under image or text
+        const label = document.createElement("div");
+        label.style.fontSize = "10px";
+        label.style.marginTop = "4px";
+        label.style.opacity = "0.8";
+        label.textContent = emote.label || emote.name;
+        // emoteElement.appendChild(label);
+      }
 
-        const emotes = this.emotes[this.currentTab] || [];
-        console.log('🐝 [Picker] renderEmotes tab=', this.currentTab, 'count=', emotes.length);
-        const filteredEmotes = this.searchTerm
-            ? emotes.filter(emote =>
-                emote.name.toLowerCase().includes(this.searchTerm) ||
-                (emote.id && emote.id.toLowerCase().includes(this.searchTerm)))
-            : emotes;
+      emoteElement.addEventListener("click", () => this.selectEmote(emote));
+      fragment.appendChild(emoteElement);
+    });
 
-        console.log('🐝 [Picker] renderEmotes filtered count=', filteredEmotes.length);
-
-        // Create elements using the same ownerDocument as the target grid
-        const fragment = (grid?.ownerDocument || document).createDocumentFragment();
-
-        emotes.forEach(emote => {
-            const emoteElement = document.createElement('div');
-            emoteElement.className = 'emote-item';
-            emoteElement.setAttribute('title', emote.name);
-            emoteElement.setAttribute('role', 'button');
-            emoteElement.setAttribute('aria-label', `Select emote ${emote.name}`);
-
-            if (emote.type === 'youtube') {
-                const textNode = document.createTextNode(emote.name);
-                emoteElement.appendChild(textNode);
-            } else {
-                // For BeeHappy emotes, create an image if URL exists, otherwise use text
-                if (emote.url) {
-                    const img = document.createElement('img');
-                    img.setAttribute('src', emote.url);
-                    img.setAttribute('alt', emote.name);
-                    img.setAttribute('loading', 'lazy');
-                    img.setAttribute('width', '32');
-                    img.setAttribute('height', '32');
-                    img.style.maxWidth = '32px';
-                    img.style.maxHeight = '32px';
-                    img.style.display = 'block';
-                    emoteElement.appendChild(img);
-                }
-                // Always show a small label under image or text
-                const label = document.createElement('div');
-                label.style.fontSize = '10px';
-                label.style.marginTop = '4px';
-                label.style.opacity = '0.8';
-                label.textContent = emote.label || emote.name;
-                // emoteElement.appendChild(label);
-            }
-
-            emoteElement.addEventListener('click', () => this.selectEmote(emote));
-            fragment.appendChild(emoteElement);
-        });
-
-        // Clear and update grid safely
-        while (grid.firstChild) {
-            grid.removeChild(grid.firstChild);
-        }
-        grid.appendChild(fragment);
-        console.log('🐝 [Picker] renderEmotes appended nodes, grid children=', grid.childElementCount);
+    // Clear and update grid safely
+    while (grid.firstChild) {
+      grid.removeChild(grid.firstChild);
     }
+    grid.appendChild(fragment);
+    console.log("🐝 [Picker] renderEmotes appended nodes, grid children=", grid.childElementCount);
+  }
 
-    async selectEmote(emote) {
-        if (!this.picker) return;
+  async selectEmote(emote) {
+    if (!this.picker) return;
 
-        const textToCopy = emote?.name || '';
+    const textToCopy = emote?.name || "";
+    let copied = false;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+        console.log("🐝 Copied emote to clipboard:", textToCopy);
+        copied = true;
+      } else {
+        // Fallback for environments without async clipboard API
+        const ta = document.createElement("textarea");
+        ta.value = textToCopy;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
         try {
-            if (navigator?.clipboard?.writeText) {
-                await navigator.clipboard.writeText(textToCopy);
-                console.log('🐝 Copied emote to clipboard:', textToCopy);
-            } else {
-                // Fallback for environments without async clipboard API
-                const ta = document.createElement('textarea');
-                ta.value = textToCopy;
-                ta.style.position = 'fixed';
-                ta.style.left = '-9999px';
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
-                try { document.execCommand('copy'); } catch (_) { }
-                ta.remove();
-                console.log('🐝 Copied emote to clipboard (fallback):', textToCopy);
-            }
-        } catch (err) {
-            console.error('🐝 Failed to copy emote to clipboard:', err);
-        } finally {
-            // Hide picker after selection
-            this.hidePicker();
+          const ok = document.execCommand("copy");
+          if (ok) copied = true;
+        } catch (_) {}
+        ta.remove();
+        if (copied) console.log("🐝 Copied emote to clipboard (fallback):", textToCopy);
+      }
+    } catch (err) {
+      console.error("🐝 Failed to copy emote to clipboard:", err);
+    } finally {
+      // Show a transient toast if the copy succeeded, then hide the picker
+      if (copied) {
+        try {
+          console.log("Showing text for this emote: ", emote);
+          this.showCopiedToast(emote.label || textToCopy);
+        } catch (e) {
+          // Ignore toast failures
         }
+      }
+      this.hidePicker();
+    }
+  }
+
+  // Small transient toast to confirm clipboard copy
+  showCopiedToast(text) {
+    try {
+      const msg = text ? `${text} copied` : "Copied to clipboard";
+      const toast = document.createElement("div");
+      toast.className = "bh-toast";
+      toast.textContent = msg;
+      // Restore critical inline styles for visibility
+      toast.style.position = "fixed";
+      toast.style.left = "50%";
+      toast.style.bottom = "8%";
+      toast.style.transform = "translateX(-50%)";
+      toast.style.background = "#7C3AED";
+      toast.style.color = "#fff";
+      toast.style.padding = "8px 12px";
+      toast.style.borderRadius = "8px";
+      toast.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+      toast.style.zIndex = 999999;
+      toast.style.opacity = "0";
+      toast.style.transition = "opacity 180ms ease-in-out, transform 180ms ease-in-out";
+      toast.style.pointerEvents = "none";
+
+      // Query for the overlay
+      const overlay = document.querySelector("#overlay-footer");
+      if (overlay) {
+        overlay.appendChild(toast);
+      } else {
+        document.body.appendChild(toast);
+      }
+
+      // Force reflow then animate in
+      // eslint-disable-next-line no-unused-expressions
+      toast.offsetHeight;
+      toast.style.opacity = "1";
+      toast.style.transform = "translateX(-50%) translateY(-6px)";
+
+      // Remove after short delay
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateX(-50%) translateY(0)";
+        setTimeout(() => {
+          try {
+            toast.remove();
+          } catch (_) {}
+        }, 200);
+      }, 1400);
+    } catch (e) {
+      console.warn("🐝 Failed to show toast", e);
+    }
+  }
+
+  togglePicker() {
+    // console.log("🐝 togglePicker() called from:", new Error().stack);
+    if (!this.picker) {
+      console.error("🐝 Picker element not found");
+      return;
     }
 
-    togglePicker() {
-        console.log('🐝 togglePicker() called from:', new Error().stack);
-        if (!this.picker) {
-            console.error('🐝 Picker element not found');
-            return;
-        }
+    const isVisible = this.picker.classList.contains("visible");
+    console.log("🐝 Picker currently visible:", isVisible);
+    if (isVisible) {
+      // console.log("🐝 Calling hidePicker() from togglePicker");
+      this.hidePicker();
+    } else {
+      // console.log("🐝 Calling showPicker() from togglePicker");
+      this.showPicker();
+    }
+  }
 
-        const isVisible = this.picker.classList.contains('visible');
-        console.log('🐝 Picker currently visible:', isVisible);
-        if (isVisible) {
-            console.log('🐝 Calling hidePicker() from togglePicker');
-            this.hidePicker();
-        } else {
-            console.log('🐝 Calling showPicker() from togglePicker');
-            this.showPicker();
-        }
+  showPicker() {
+    // console.log("🐝 Show picker called");
+    if (!this.picker) {
+      console.error("🐝 Picker element not found in showPicker");
+      return;
     }
 
-    showPicker() {
-        console.log('🐝 Show picker called');
-        if (!this.picker) {
-            console.error('🐝 Picker element not found in showPicker');
-            return;
-        }
+    // Simply add the visible class
+    this.picker.classList.add("visible");
+    console.log("🐝 Picker classes after show:", this.picker.className);
 
-        // Simply add the visible class
-        this.picker.classList.add('visible');
-        console.log('🐝 Picker classes after show:', this.picker.className);
+    // Ensure picker stays within viewport
+    this.adjustPickerPosition();
 
-        // Ensure picker stays within viewport
-        this.adjustPickerPosition();
-
-        const emoteBtn = document.getElementById('emoteBtn');
-        if (emoteBtn) {
-            emoteBtn.classList.add('active');
-            console.log('🐝 Emote button set to active');
-        }
-
-        // Focus the search input when picker opens
-        if (this.searchInput) {
-            setTimeout(() => this.searchInput.focus(), 100);
-        }
+    const emoteBtn = document.getElementById("emoteBtn");
+    if (emoteBtn) {
+      emoteBtn.classList.add("active");
+      console.log("🐝 Emote button set to active");
     }
 
-    adjustPickerPosition() {
-        if (!this.picker) return;
+    // Focus the search input when picker opens
+    if (this.searchInput) {
+      setTimeout(() => this.searchInput.focus(), 100);
+    }
+  }
 
-        const rect = this.picker.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        const viewportWidth = window.innerWidth;
+  adjustPickerPosition() {
+    if (!this.picker) return;
 
-        // If picker goes above viewport, position it below the button instead
-        if (rect.top < 0) {
-            this.picker.style.bottom = 'auto';
-            this.picker.style.top = '100%';
-            this.picker.style.marginTop = '8px';
-            this.picker.style.marginBottom = '0';
-            this.picker.style.borderRadius = '0 0 12px 12px';
-        } else {
-            // Reset to default position (above button)
-            this.picker.style.bottom = '100%';
-            this.picker.style.top = 'auto';
-            this.picker.style.marginTop = '0';
-            this.picker.style.marginBottom = '8px';
-            this.picker.style.borderRadius = '12px';
-        }
+    const rect = this.picker.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
 
-        // If picker goes off the right edge, adjust right position
-        if (rect.right > viewportWidth) {
-            this.picker.style.right = '0';
-            this.picker.style.left = 'auto';
-        }
+    // If picker goes above viewport, position it below the button instead
+    if (rect.top < 0) {
+      this.picker.style.bottom = "auto";
+      this.picker.style.top = "100%";
+      this.picker.style.marginTop = "8px";
+      this.picker.style.marginBottom = "0";
+      this.picker.style.borderRadius = "0 0 12px 12px";
+    } else {
+      // Reset to default position (above button)
+      this.picker.style.bottom = "100%";
+      this.picker.style.top = "auto";
+      this.picker.style.marginTop = "0";
+      this.picker.style.marginBottom = "8px";
+      this.picker.style.borderRadius = "12px";
     }
 
-    hidePicker() {
-        console.log('🐝 hidePicker() called from:', new Error().stack);
-        if (!this.picker) return;
+    // If picker goes off the right edge, adjust right position
+    if (rect.right > viewportWidth) {
+      this.picker.style.right = "0";
+      this.picker.style.left = "auto";
+    }
+  }
 
-        // Simply remove the visible class
-        this.picker.classList.remove('visible');
-        console.log('🐝 Picker hidden, classes:', this.picker.className);
+  hidePicker() {
+    // console.log("🐝 hidePicker() called from:", new Error().stack);
+    if (!this.picker) return;
 
-        const emoteBtn = document.getElementById('emoteBtn');
-        if (emoteBtn) {
-            emoteBtn.classList.remove('active');
-        }
+    // Simply remove the visible class
+    this.picker.classList.remove("visible");
+    // console.log("🐝 Picker hidden, classes:", this.picker.className);
 
-        // Clear search when hiding
-        if (this.searchInput) {
-            this.searchInput.value = '';
-            this.searchTerm = '';
-        }
+    const emoteBtn = document.getElementById("emoteBtn");
+    if (emoteBtn) {
+      emoteBtn.classList.remove("active");
     }
 
+    // Clear search when hiding
+    if (this.searchInput) {
+      this.searchInput.value = "";
+      this.searchTerm = "";
+    }
+  }
 }
 
 // Initialize when the document is ready
-let emotePickerInstance = null;
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        if (!emotePickerInstance) {
-            emotePickerInstance = new BeeHappyEmotePicker();
-            // Expose for testing
-            window.beeHappyEmotePicker = emotePickerInstance;
-        }
-    });
-} else {
-    if (!emotePickerInstance) {
-        emotePickerInstance = new BeeHappyEmotePicker();
-        // Expose for testing
-        window.beeHappyEmotePicker = emotePickerInstance;
+// let emotePickerInstance = null;
+// if (document.readyState === "loading") {
+//   document.addEventListener("DOMContentLoaded", () => {
+//     if (!emotePickerInstance) {
+//       emotePickerInstance = new BeeHappyEmotePicker();
+//       // Expose for testing
+//       window.beeHappyEmotePicker = emotePickerInstance;
+//     }
+//   });
+// } else {
+//   if (!emotePickerInstance) {
+//     emotePickerInstance = new BeeHappyEmotePicker();
+//     // Expose for testing
+//     window.beeHappyEmotePicker = emotePickerInstance;
+//   }
+// }
+
+document.addEventListener("BeeHappyOverlayReady", () => {
+  if (!window.beeHappyEmotePicker) {
+    window.beeHappyEmotePicker = new BeeHappyEmotePicker();
+  }
+});
+
+// Fallback: respond to custom event dispatched from page/overlay if picker isn't available yet
+document.addEventListener("beehappy:togglePicker", () => {
+  try {
+    if (window.beeHappyEmotePicker && typeof window.beeHappyEmotePicker.togglePicker === "function") {
+      window.beeHappyEmotePicker.togglePicker();
+    } else {
+      console.warn("🐝 beehappy:togglePicker received but picker not ready");
     }
-}
+  } catch (e) {
+    console.error("🐝 Error handling beehappy:togglePicker", e);
+  }
+});

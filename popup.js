@@ -213,11 +213,6 @@ class BeeHappyPopup {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       const currentTab = tabs[0];
       
-      if (!currentTab.url.includes('youtube.com/watch') && !currentTab.url.includes('youtube.com/live')) {
-        alert('Please navigate to a YouTube live stream first!');
-        return;
-      }
-      
       // Send toggle message to content script
       const response = await chrome.tabs.sendMessage(currentTab.id, {
         action: 'toggleOverlay'
