@@ -5,7 +5,7 @@
     <style>
       :root {
         --primary: #7c3aed;
-        --secondary: #0ea5e9;
+        --secondary: #1e40af;
         --accent: #f59e0b;
         --dark-bg: #000000;
         --dark-surface: #0a0a0a;
@@ -72,25 +72,38 @@
         font-size: 14px;
         border: 1px dashed var(--dark-border);
       }
+      .how-to-use {
+        margin-top: 18px;
+        background: var(--dark-surface);
+        border-radius: 8px;
+        padding: 16px;
+        color: var(--text-secondary);
+        font-size: 15px;
+        border: 1px solid var(--dark-border);
+      }
+      .loginBtn {
+        margin-top: 8px;
+        padding: 10px 14px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+      }
     </style>
   </head>
   <body>
     <div class="popup-header">🐝 BeeHappy</div>
     <div class="popup-section">
       <button id="toggle-overlay" class="popup-btn">Toggle Overlay Chat</button>
-      <div id="auth-space">Auth UI coming soon...</div>
-      <div
-        class="how-to-use"
-        style="
-          margin-top: 18px;
-          background: var(--dark-surface);
-          border-radius: 8px;
-          padding: 16px;
-          color: var(--text-secondary);
-          font-size: 15px;
-          border: 1px solid var(--dark-border);
-        "
-      >
+      <div id="auth-space">
+        <button id="login-btn" class="loginBtn">Login to BeeHappy</button>
+      </div>
+      <div class="how-to-use">
         <div style="font-weight: 600; color: var(--primary); margin-bottom: 8px">How to use:</div>
         <ol style="padding-left: 18px; margin: 0">
           <li>Press the <strong>Toggle Overlay Chat</strong> button above.</li>

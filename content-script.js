@@ -226,7 +226,7 @@ class BeeHappyEmoteReplacer {
 let overlayChat = null;
 
 // Message handling for communication with popup and background
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   // Skip message handling in iframes
   if (window.top !== window) {
     sendResponse({ error: "Not available in iframe" });
@@ -284,6 +284,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true; // Keep message channel open
 });
 
+// Listener for auth bridge messages
+function authMessageListener() {
+  console.log("🐝 Setting up auth message listener...");
+  window.addEventListener("message", async (event) => {
+    console.log("🐝 Auth message event:", event);
+    // Only accept messages from your BeeHappy domain
+    if (
+      !event.origin.includes("https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net") &&
+      !event.origin.includes("https://localhost:7256")
+    ) {
+      console.warn("🐝 Ignoring message from unknown origin:", event.origin);
+      return;
+    }
+
+    console.log("🐝 Received auth message:", event.data);
+    if (event.data?.type === "BEEHAPPY_TOKEN") {
+      // Get token from the storage and compare if it is the same
+      const stored = await chrome.storage.local.get(["token"]);
+      const token = event.data.token;
+      if (stored.token === token) {
+        console.log("[BeeHappy] Token already stored, ignoring.");
+        return;
+      }
+      if (token) {
+        await chrome.storage.local.set({ token });
+        console.log("[BeeHappy] ✅ Token stored:", token);
+      }
+    }
+  });
+}
+
 // Initialize the BeeHappy system
 if (window.top !== window) {
   // In iframe: only initialize emote replacer
@@ -327,5 +358,11 @@ if (window.top !== window) {
     setTimeout(() => {
       if (!overlayChat) initializeOverlay();
     }, 3000);
+  } else if (
+    window.location.href.includes("beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/") ||
+    window.location.href.includes("localhost:7256")
+  ) {
+    // We are in the auth bridge page, only init the listener
+    authMessageListener();
   }
 }

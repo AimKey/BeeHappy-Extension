@@ -11,7 +11,7 @@ const BG_CONSTANTS = {
 };
 
 // Handle API requests from content scripts
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === BG_CONSTANTS.MESSAGE_ACTIONS.FETCH_EMOTES) {
     fetchEmotes(request.url)
       .then((data) => sendResponse({ success: true, data }))
@@ -47,6 +47,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     });
     return true;
+  }
+
+  if (request.action === "getUserInfo") {
+    try {
+      const result = await chrome.storage.local.get(["token"]);
+      const token = result.token;
+
+      if (!token) {
+        sendResponse({ success: false, error: "No auth token found" });
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(`${API_BASE_URL}/api/user/me`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const userInfo = await response.json();
+      sendResponse({ success: true, user: userInfo });
+    } catch (error) {
+      console.error("🐝 Get user info failed:", error);
+      sendResponse({
+        success: false,
+        error: error.name === "AbortError" ? "Request timeout" : error.message,
+      });
+    }
   }
 });
 

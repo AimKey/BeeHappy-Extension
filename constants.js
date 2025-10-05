@@ -38,20 +38,6 @@
     CHAT_CONTAINER: ["yt-live-chat-renderer", "#chat-container", ".yt-live-chat-renderer"],
   };
 
-  // Default Emotes (fallback when API fails)
-  const DEFAULT_EMOTES = {
-    "[bh:poggers]": "🎮POGGERS🎮",
-    "[bh:kappa]": "⚡KAPPA⚡",
-    "[bh:lul]": "😂LUL😂",
-    "[bh:pepe]": "😢PEPE😢",
-    "[bh:quay_đều]": "🎮QUAY ĐỀU🎮",
-    "[bh:độ_mixi]": "⚡ĐỘ MIXI⚡",
-    "[bh:test]": "🎮",
-    "[bh:emote]": "⚡",
-    "[bh:fire]": "🔥",
-    "[bh:smile]": "😊",
-  };
-
   // Event Names
   const EVENTS = {
     CONFIG_READY: "beehappy-config-ready",
@@ -85,7 +71,6 @@
     STORAGE_KEYS,
     UI_CONFIG,
     YOUTUBE_SELECTORS,
-    DEFAULT_EMOTES,
     EVENTS,
     LOG_CONFIG,
     MESSAGE_ACTIONS,
