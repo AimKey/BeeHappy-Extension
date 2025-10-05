@@ -109,7 +109,7 @@ class BeeHappyEmoteReplacer {
         if (url && url !== "") {
           // Create image element like overlay chat does
           const img = document.createElement("img");
-          img.className = "yt-emoji";
+          img.className = emoteClass;
           img.setAttribute("alt", token);
           img.setAttribute("src", url);
           img.setAttribute("loading", "lazy");

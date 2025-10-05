@@ -1,13 +1,5 @@
 // Centralized BeeHappy emote map with storage + API refresh hooks
 (function () {
-  // Use constants from global BeeHappyConstants
-  // const DEFAULT_MAP = window.BeeHappyConstants?.DEFAULT_EMOTES || {
-  //   "[bh:poggers]": "🎮POGGERS🎮",
-  //   "[bh:kappa]": "⚡KAPPA⚡",
-  //   "[bh:lul]": "😂LUL😂",
-  //   "[bh:pepe]": "😢PEPE😢",
-  // };
-
   // const STORAGE_KEY = window.BeeHappyConstants?.STORAGE_KEYS?.EMOTE_MAP || "bh_emote_map_v1";
   const API_URL =
     window.BeeHappyConstants?.getApiUrl(window.BeeHappyConstants?.API_CONFIG?.EMOTES_ENDPOINT) ||
@@ -26,28 +18,6 @@
     return parts.length ? new RegExp(parts.join("|"), "g") : null;
   }
 
-  // async function loadFromStorage() {
-  //   try {
-  //     const data = await chrome.storage.local.get([STORAGE_KEY, STORAGE_KEY + ":list"]);
-  //     const map = data && data[STORAGE_KEY] && typeof data[STORAGE_KEY] === "object" ? data[STORAGE_KEY] : null;
-  //     const list = Array.isArray(data?.[STORAGE_KEY + ":list"]) ? data[STORAGE_KEY + ":list"] : [];
-  //     if (map) return { map, list };
-  //   } catch (_) {
-  //     /* ignore */
-  //   }
-  //   return null;
-  // }
-
-  // async function saveToStorage(map, list) {
-  //   const payload = { [STORAGE_KEY]: map };
-  //   if (Array.isArray(list)) payload[STORAGE_KEY + ":list"] = list;
-  //   try {
-  //     await chrome.storage.local.set(payload);
-  //   } catch (_) {
-  //     /* ignore */
-  //   }
-  // }
-
   async function ensureInitialized() {
     if (state.map) {
       console.log("[Emote map]: Initialized state: ", state);
@@ -56,12 +26,6 @@
       console.log("[Emote map]: Initialized state: ", state);
       return false;
     }
-    // const stored = await loadFromStorage();
-    // state.map = DEFAULT_MAP;
-    // state.regex = buildRegex(state.map);
-    // state.list = [];
-    // if (!stored) saveToStorage(state.map, state.list);
-    // console.log(state);
   }
 
   let _inFlight = false;
@@ -87,6 +51,7 @@
           return String(u || "");
         }
       };
+
       // Convert the name (including vietnamese) into suitable string for the emote picker
       const slugify = (s) =>
         (s || "")
@@ -101,10 +66,13 @@
       resp.data.forEach((item) => {
         if (!item || typeof item.name !== "string") return;
         const slug = slugify(item.name);
-        const token = `[bh:${slug}]`;
-        const file = Array.isArray(item.files) && item.files.length ? item.files[0] : null;
+        // const token = `[bh:${slug}]`;
+        const token = `${slug}`;
+        const file = Array.isArray(item.files) && item.files.length ? item.files[item.files.length - 1] : null;
+        // const file = Array.isArray(item.files) && item.files.length ? item.files[0] : null;
         const url = file?.url ? toAbs(file.url) : "";
-        list.push({ token, name: item.name, url });
+        const byUser = item.byUser ? item.byUser : "unknown";
+        list.push({ token, name: item.name, url, byUser });
         // TODO: Handle duplicate emote name ?
         if (!next[token]) next[token] = item.name; // textual fallback replacement
       });

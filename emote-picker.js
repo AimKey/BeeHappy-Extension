@@ -199,8 +199,8 @@ class BeeHappyEmotePicker {
     const yt = this.emoteGridYoutube;
     const bh = this.emoteGridBeeHappy;
     if (yt && bh) {
-      yt.classList.remove("hidden");
-      bh.classList.add("hidden");
+      bh.classList.remove("hidden");
+      yt.classList.add("hidden");
     }
   }
 
@@ -340,10 +340,8 @@ class BeeHappyEmotePicker {
     const fragment = (grid?.ownerDocument || document).createDocumentFragment();
 
     emotes.forEach((emote) => {
-      // console.log("🐝 [Picker] Loading emote:", emote);
       const emoteElement = document.createElement("div");
       emoteElement.className = "emote-item";
-      emoteElement.setAttribute("title", emote.name);
       emoteElement.setAttribute("role", "button");
       emoteElement.setAttribute("aria-label", `Select emote ${emote.name}`);
 
@@ -351,7 +349,6 @@ class BeeHappyEmotePicker {
         const textNode = document.createTextNode(emote.name);
         emoteElement.appendChild(textNode);
       } else {
-        // For BeeHappy emotes, create an image if URL exists, otherwise use text
         if (emote.url) {
           const img = document.createElement("img");
           img.setAttribute("src", emote.url);
@@ -364,14 +361,68 @@ class BeeHappyEmotePicker {
           img.style.display = "block";
           emoteElement.appendChild(img);
         }
-        // Always show a small label under image or text
-        const label = document.createElement("div");
-        label.style.fontSize = "10px";
-        label.style.marginTop = "4px";
-        label.style.opacity = "0.8";
-        label.textContent = emote.label || emote.name;
-        // emoteElement.appendChild(label);
       }
+
+      // Tooltip logic
+      emoteElement.addEventListener("mouseenter", (e) => {
+        let tooltip = document.createElement("div");
+        tooltip.className = "bh-emote-tooltip";
+        tooltip.style.position = "fixed";
+        tooltip.style.zIndex = 10010;
+        tooltip.style.background = "#222";
+        tooltip.style.color = "#fff";
+        tooltip.style.padding = "8px 12px";
+        tooltip.style.borderRadius = "8px";
+        tooltip.style.boxShadow = "0 2px 8px rgba(0,0,0,0.25)";
+        tooltip.style.fontSize = "14px";
+        tooltip.style.pointerEvents = "none";
+        tooltip.style.display = "flex";
+        tooltip.style.alignItems = "center";
+        tooltip.style.gap = "8px";
+
+        // Emote preview
+        if (emote.url) {
+          const img = document.createElement("img");
+          img.src = emote.url;
+          img.alt = emote.name;
+          img.width = 64;
+          img.height = 64;
+          img.style.display = "inline-block";
+          img.style.verticalAlign = "middle";
+          tooltip.appendChild(img);
+        } else {
+          const span = document.createElement("span");
+          span.textContent = emote.name;
+          span.style.fontSize = "24px";
+          span.style.marginRight = "8px";
+          tooltip.appendChild(span);
+        }
+
+        // Emote name
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = emote.label || emote.name;
+        nameSpan.style.fontWeight = "bold";
+        tooltip.appendChild(nameSpan);
+
+        document.body.appendChild(tooltip);
+
+        // Position tooltip above the hovered emote element
+        const emoteRect = emoteElement.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        // Center tooltip horizontally to emote, and place above
+        const left = emoteRect.left + emoteRect.width / 2 - tooltipRect.width / 2;
+        const top = emoteRect.top - tooltipRect.height - 8; // 8px gap above
+        tooltip.style.left = Math.max(left, 8) + "px";
+        tooltip.style.top = Math.max(top, 8) + "px";
+
+        emoteElement._bhTooltip = tooltip;
+      });
+      emoteElement.addEventListener("mouseleave", () => {
+        if (emoteElement._bhTooltip) {
+          emoteElement._bhTooltip.remove();
+          emoteElement._bhTooltip = null;
+        }
+      });
 
       emoteElement.addEventListener("click", () => this.selectEmote(emote));
       fragment.appendChild(emoteElement);
@@ -444,7 +495,7 @@ class BeeHappyEmotePicker {
       toast.style.padding = "8px 12px";
       toast.style.borderRadius = "8px";
       toast.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
-      toast.style.zIndex = 999999;
+      toast.style.zIndex = 500;
       toast.style.opacity = "0";
       toast.style.transition = "opacity 180ms ease-in-out, transform 180ms ease-in-out";
       toast.style.pointerEvents = "none";

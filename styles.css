@@ -3,7 +3,7 @@
   position: fixed;
   top: 100px;
   right: 20px;
-  width: 300px;
+  width: 320px;
   height: 400px;
   background: rgba(33, 33, 33, 0.95);
   border: 1px solid #444;
@@ -13,7 +13,7 @@
   display: flex;
   flex-direction: column;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  z-index: 9999999;
+  z-index: 10000;
 }
 
 #overlayHeader {
@@ -123,7 +123,6 @@
 .message-content img.emoji,
 .message-content img.yt-emoji {
   display: inline-block;
-  height: 1.2em;
   width: auto;
   vertical-align: -0.15em;
   margin: 0 0.05em;

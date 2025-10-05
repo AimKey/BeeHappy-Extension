@@ -20,7 +20,7 @@
 
   // UI Configuration
   const UI_CONFIG = {
-    OVERLAY_Z_INDEX: 9999999,
+    OVERLAY_Z_INDEX: 10000,
     POPUP_WIDTH: 300,
     POPUP_MIN_HEIGHT: 400,
     EMOTE_CLASS: "bh-emote",
