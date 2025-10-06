@@ -4,7 +4,7 @@
    - If it's running in the top frame, it will create an overlay and listen for messages from iframe helpers.
 */
 let chatRootElement = null;
-
+let defaultOverlayHeight = -1;
 // --- If running inside a frame (chat iframe), bootstrap a helper observer that posts messages to parent ---
 if (window.top !== window.self) {
   (function setupIframeHelper() {
@@ -382,6 +382,7 @@ class BeeHappyOverlayChat {
   toggleMinimize() {
     this.isMinimized = !this.isMinimized;
     this.overlay.classList.toggle("overlay-minimized", this.isMinimized);
+    this.overlay.style.height = this.isMinimized ? "48px" : defaultOverlayHeight;
 
     const minimizeBtn = this.overlay.querySelector("#minimizeBtn");
     minimizeBtn.textContent = this.isMinimized ? "+" : "−";
@@ -661,15 +662,16 @@ class BeeHappyOverlayChat {
       if (chatFrame) {
         const rect = chatFrame.getBoundingClientRect();
         // Position overlay at the top-left of the chat iframe, with some offset
-        this.overlay.style.position = "fixed";
+        // this.overlay.style.position = "fixed";
         this.overlay.style.left = rect.left + "px";
         this.overlay.style.top = rect.top + "px";
         this.overlay.style.right = "auto";
         this.overlay.style.bottom = "auto";
-        this.overlay.style.height = rect.height - 55 + "px"; // 55 is the height of the chat input lol
+        defaultOverlayHeight = rect.height - 55 + "px";
+        this.overlay.style.height = defaultOverlayHeight; // 55 is the height of the chat input lol
       } else {
         // Fallback to default position
-        this.overlay.style.position = "fixed";
+        // this.overlay.style.position = "fixed";
         this.overlay.style.top = "100px";
         this.overlay.style.right = "20px";
         this.overlay.style.left = "auto";
@@ -702,7 +704,6 @@ class BeeHappyOverlayChat {
         // After showing, ensure overlay is positioned on screen
         const rect = this.overlay.getBoundingClientRect();
         if (rect.right > window.innerWidth || rect.left < 0 || rect.top < 0 || rect.bottom > window.innerHeight) {
-          this.overlay.style.position = "fixed";
           this.overlay.style.top = "100px";
           this.overlay.style.right = "20px";
           this.overlay.style.left = "auto";

@@ -327,24 +327,22 @@ if (window.top !== window) {
       if (!overlayChat) {
         try {
           overlayChat = new BeeHappyOverlayChat();
-
-          // Ask background to inject helper into all frames
-          try {
-            chrome.runtime.sendMessage({ action: "inject_helper_all_frames" }, (resp) => {
-              if (!resp?.success && resp?.error !== "scripting.executeScript not available") {
-                console.warn("🐝 inject_helper_all_frames failed:", resp?.error);
-              }
-            });
-          } catch (e) {
-            // Ignore errors - iframe helper is optional
-          }
+          // // Ask background to inject helper into all frames
+          // try {
+          //   chrome.runtime.sendMessage({ action: "inject_helper_all_frames" }, (resp) => {
+          //     if (!resp?.success && resp?.error !== "scripting.executeScript not available") {
+          //       console.warn("🐝 inject_helper_all_frames failed:", resp?.error);
+          //     }
+          //   });
+          // } catch (e) {
+          //   // Ignore errors - iframe helper is optional
+          // }
         } catch (error) {
           console.error("🐝 Failed to initialize overlay:", error);
           overlayChat = null;
         }
       }
     };
-
     // Try to initialize as soon as possible
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
@@ -353,7 +351,6 @@ if (window.top !== window) {
     } else {
       setTimeout(initializeOverlay, 1000);
     }
-
     // Also try after a delay for YouTube's dynamic loading
     setTimeout(() => {
       if (!overlayChat) initializeOverlay();

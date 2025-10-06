@@ -103,32 +103,21 @@ class BeeHappyEmotePicker {
       this.emoteGridYoutube = document.getElementById("emoteGridYoutube");
       this.emoteGridBeeHappy = document.getElementById("emoteGridBeeHappy");
       this.tabs = document.querySelectorAll(".picker-tab");
-      console.log("🐝 [Picker] Elements found:", document.getElementById("emotePicker"));
 
       // Wait for elements to be ready
       while (!this.searchInput || !this.emoteGridYoutube || !this.emoteGridBeeHappy || !this.tabs) {
         if (this.retryCount >= this.maxRetries) {
           console.warn("🐝 Element initialization timeout, will retry later");
-          // Don't throw error, just return and let it retry when overlay is ready
           return;
         }
-        console.log(
-          "🐝 Waiting for elements...",
-          this.picker,
-          this.searchInput,
-          this.emoteGridYoutube,
-          this.emoteGridBeeHappy,
-          this.tabs
-        );
         this.retryCount++;
         // Try to get it again
         this.picker = document.getElementById("emotePicker");
         this.searchInput = document.getElementById("emoteSearchInput");
-        // Two dedicated grids (one per tab)
         this.emoteGridYoutube = document.getElementById("emoteGridYoutube");
         this.emoteGridBeeHappy = document.getElementById("emoteGridBeeHappy");
         this.tabs = document.querySelectorAll(".picker-tab");
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Slight delay to avoid tight loop
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       console.log("🐝 [Picker] All elements found, proceeding with initialization");
@@ -137,11 +126,6 @@ class BeeHappyEmotePicker {
       if (!this.initialized) {
         this.initialized = true;
         console.log("🐝 Emote picker initialized");
-        console.log("🐝 Picker element:", this.picker);
-        console.log("🐝 Search input:", this.searchInput);
-        console.log("🐝 YouTube emote grid:", this.emoteGridYoutube);
-        console.log("🐝 BeeHappy emote grid:", this.emoteGridBeeHappy);
-        console.log("🐝 Tabs:", this.tabs);
 
         // Set up the picker
         await this.setupPicker();
@@ -175,7 +159,6 @@ class BeeHappyEmotePicker {
 
     // ✅ Subscribe to updates FIRST, before any loading
     window.BeeHappyEmotes?.onUpdate?.((map, regex, list) => {
-      console.log("🐝 [Picker] onUpdate received list:", list);
       if (!Array.isArray(list) || list.length === 0) {
         console.warn("🐝 [Picker] onUpdate received empty list, skipping update");
         return;
@@ -183,10 +166,7 @@ class BeeHappyEmotePicker {
 
       if (Array.isArray(list)) {
         this.updateBeeHappyFromList(list);
-
-        // Pre-populate BeeHappy grid once data arrives
         this.renderInto("beehappy");
-        console.log("🐝 [Picker] BeeHappy emotes updated via onUpdate");
       }
     });
 
@@ -271,17 +251,11 @@ class BeeHappyEmotePicker {
 
       if (!list || !list.length) {
         try {
-          console.log("🐝 [Picker] BeeHappy list empty, triggering refreshFromApi");
-          console.log("🐝 [Picker] BeeHappyEmotes list status:", window.BeeHappyEmotes.list);
           const result = await window.BeeHappyEmotes.refreshFromApi();
-
-          // ✅ After API call, get the updated list and update immediately
           if (result) {
             const updatedList = window.BeeHappyEmotes.getList();
-            // console.log("🐝 [Picker] BeeHappy list after refresh:", updatedList);
             if (updatedList && updatedList.length > 0) {
               this.updateBeeHappyFromList(updatedList);
-              // console.log("🐝 [Picker] BeeHappy emotes loaded directly from API result");
             }
           }
         } catch (error) {
@@ -290,7 +264,6 @@ class BeeHappyEmotePicker {
       } else {
         // ✅ If list already exists, update immediately
         this.updateBeeHappyFromList(list);
-        console.log("🐝 [Picker] BeeHappy emotes loaded from existing list");
       }
     } catch (error) {
       console.warn("🐝 Error loading BeeHappy emotes:", error);
@@ -305,7 +278,6 @@ class BeeHappyEmotePicker {
   }
 
   updateBeeHappyFromList(list) {
-    console.log("🐝 [Picker] Updating BeeHappy emotes from list:", list);
     this.emotes.beehappy = list.map((item) => ({
       id: item.token,
       name: item.token, // use token as the value we copy
@@ -313,21 +285,18 @@ class BeeHappyEmotePicker {
       type: "beehappy",
       label: item.name || item.token,
     }));
-    console.log("🐝 [Picker] BeeHappy emotes updated, count=", this.emotes.beehappy.length);
   }
 
   // ensureBeeHappyList removed – grids are preloaded and updated via onUpdate
 
   renderEmotes() {
     const grid = this.currentTab === "youtube" ? this.emoteGridYoutube : this.emoteGridBeeHappy;
-    console.log("🐝 [Picker] renderEmotes into tab=", this.currentTab, "grid=", grid);
     if (!grid) {
       console.warn("🐝 [Picker] renderEmotes: emoteGrid not ready");
       return;
     }
 
     const emotes = this.emotes[this.currentTab] || [];
-    console.log("🐝 [Picker] Emotes for this tab: ", emotes);
     const filteredEmotes = this.searchTerm
       ? emotes.filter(
           (emote) =>
@@ -433,7 +402,6 @@ class BeeHappyEmotePicker {
       grid.removeChild(grid.firstChild);
     }
     grid.appendChild(fragment);
-    console.log("🐝 [Picker] renderEmotes appended nodes, grid children=", grid.childElementCount);
   }
 
   async selectEmote(emote) {
@@ -444,7 +412,6 @@ class BeeHappyEmotePicker {
     try {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(textToCopy);
-        console.log("🐝 Copied emote to clipboard:", textToCopy);
         copied = true;
       } else {
         // Fallback for environments without async clipboard API
@@ -460,7 +427,9 @@ class BeeHappyEmotePicker {
           if (ok) copied = true;
         } catch (_) {}
         ta.remove();
-        if (copied) console.log("🐝 Copied emote to clipboard (fallback):", textToCopy);
+        if (copied) {
+          // Successfully copied via fallback
+        }
       }
     } catch (err) {
       console.error("🐝 Failed to copy emote to clipboard:", err);
@@ -468,7 +437,6 @@ class BeeHappyEmotePicker {
       // Show a transient toast if the copy succeeded, then hide the picker
       if (copied) {
         try {
-          console.log("Showing text for this emote: ", emote);
           this.showCopiedToast(emote.label || textToCopy);
         } catch (e) {
           // Ignore toast failures
@@ -530,25 +498,20 @@ class BeeHappyEmotePicker {
   }
 
   togglePicker() {
-    // console.log("🐝 togglePicker() called from:", new Error().stack);
     if (!this.picker) {
       console.error("🐝 Picker element not found");
       return;
     }
 
     const isVisible = this.picker.classList.contains("visible");
-    console.log("🐝 Picker currently visible:", isVisible);
     if (isVisible) {
-      // console.log("🐝 Calling hidePicker() from togglePicker");
       this.hidePicker();
     } else {
-      // console.log("🐝 Calling showPicker() from togglePicker");
       this.showPicker();
     }
   }
 
   showPicker() {
-    // console.log("🐝 Show picker called");
     if (!this.picker) {
       console.error("🐝 Picker element not found in showPicker");
       return;
@@ -556,7 +519,6 @@ class BeeHappyEmotePicker {
 
     // Simply add the visible class
     this.picker.classList.add("visible");
-    console.log("🐝 Picker classes after show:", this.picker.className);
 
     // Ensure picker stays within viewport
     this.adjustPickerPosition();
@@ -564,7 +526,6 @@ class BeeHappyEmotePicker {
     const emoteBtn = document.getElementById("emoteBtn");
     if (emoteBtn) {
       emoteBtn.classList.add("active");
-      console.log("🐝 Emote button set to active");
     }
 
     // Focus the search input when picker opens
@@ -604,12 +565,10 @@ class BeeHappyEmotePicker {
   }
 
   hidePicker() {
-    // console.log("🐝 hidePicker() called from:", new Error().stack);
     if (!this.picker) return;
 
     // Simply remove the visible class
     this.picker.classList.remove("visible");
-    // console.log("🐝 Picker hidden, classes:", this.picker.className);
 
     const emoteBtn = document.getElementById("emoteBtn");
     if (emoteBtn) {
@@ -623,24 +582,6 @@ class BeeHappyEmotePicker {
     }
   }
 }
-
-// Initialize when the document is ready
-// let emotePickerInstance = null;
-// if (document.readyState === "loading") {
-//   document.addEventListener("DOMContentLoaded", () => {
-//     if (!emotePickerInstance) {
-//       emotePickerInstance = new BeeHappyEmotePicker();
-//       // Expose for testing
-//       window.beeHappyEmotePicker = emotePickerInstance;
-//     }
-//   });
-// } else {
-//   if (!emotePickerInstance) {
-//     emotePickerInstance = new BeeHappyEmotePicker();
-//     // Expose for testing
-//     window.beeHappyEmotePicker = emotePickerInstance;
-//   }
-// }
 
 document.addEventListener("BeeHappyOverlayReady", () => {
   if (!window.beeHappyEmotePicker) {

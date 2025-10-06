@@ -11,8 +11,9 @@ const BG_CONSTANTS = {
 };
 
 // Handle API requests from content scripts
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === BG_CONSTANTS.MESSAGE_ACTIONS.FETCH_EMOTES) {
+    console.log("Fetching from this link: ", request.url);
     fetchEmotes(request.url)
       .then((data) => sendResponse({ success: true, data }))
       .catch((error) => {
@@ -27,65 +28,78 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
   // Inject the emote picker script into all frames of the active tab (including the iframe of youtube chat)
   if (request.action === BG_CONSTANTS.MESSAGE_ACTIONS.INJECT_HELPER) {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.scripting
-          .executeScript({
-            target: { tabId: tabs[0].id, allFrames: true },
-            files: ["emote-picker.js"],
-          })
-          .then(() => {
-            sendResponse({ success: true });
-          })
-          .catch((error) => {
-            console.error("🐝 Script Injection Error:", error);
-            sendResponse({
-              success: false,
-              error: error.message || "Failed to inject script",
-            });
-          });
-      }
-    });
+    // chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    //   if (tabs[0]) {
+    //     chrome.scripting
+    //       .executeScript({
+    //         target: { tabId: tabs[0].id, allFrames: true },
+    //         files: ["emote-picker.js"],
+    //       })
+    //       .then(() => {
+    //         sendResponse({ success: true });
+    //       })
+    //       .catch((error) => {
+    //         console.error("🐝 Script Injection Error:", error);
+    //         sendResponse({
+    //           success: false,
+    //           error: error.message || "Failed to inject script",
+    //         });
+    //       });
+    //   }
+    // });
     return true;
   }
 
   if (request.action === "getUserInfo") {
-    try {
-      const result = await chrome.storage.local.get(["token"]);
-      const token = result.token;
+    chrome.storage.local
+      .get(["token"])
+      .then((result) => {
+        const token = result.token;
 
-      if (!token) {
-        sendResponse({ success: false, error: "No auth token found" });
-        return;
-      }
+        if (!token) {
+          sendResponse({ success: false, error: "No auth token found, please login first" });
+          return;
+        }
+        console.log("🐝 Get user info with token:", token);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        // FIXME: Change back the api route to prod later
+        // const API_BASE_URL = "https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net";
+        const API_BASE_URL = "https://localhost:7256";
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+        return fetch(`${API_BASE_URL}/api/users/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+        })
+          .then((response) => {
+            console.log("🐝 Get user info response", response.body);
+            clearTimeout(timeoutId);
 
-      const response = await fetch(`${API_BASE_URL}/api/user/me`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
+            if (!response.ok) {
+              return response.json().then((data) => {
+                throw new Error(`API Error: ${response.status}, data: ${JSON.stringify(data)}`);
+              });
+            }
+
+            return response.json();
+          })
+          .then((userInfo) => {
+            sendResponse({ success: true, user: userInfo });
+          });
+      })
+      .catch((error) => {
+        console.error("🐝 Get user info failed:", error);
+        sendResponse({
+          success: false,
+          error: error.name === "AbortError" ? "Request timeout" : error.message,
+        });
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      const userInfo = await response.json();
-      sendResponse({ success: true, user: userInfo });
-    } catch (error) {
-      console.error("🐝 Get user info failed:", error);
-      sendResponse({
-        success: false,
-        error: error.name === "AbortError" ? "Request timeout" : error.message,
-      });
-    }
+    return true; // Keep message channel open for async response
   }
 });
 

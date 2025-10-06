@@ -1,4 +1,4 @@
-// Centralized BeeHappy emote map with storage + API refresh hooks
+// This function only provide the emote map and regex, it does not init anything.
 (function () {
   // const STORAGE_KEY = window.BeeHappyConstants?.STORAGE_KEYS?.EMOTE_MAP || "bh_emote_map_v1";
   const API_URL =
@@ -41,6 +41,11 @@
       // TODO: Handle get user emotes, current streamer emotes  + global emotes
       const resp = await chrome.runtime.sendMessage({ action: "fetch_emotes", url: API_URL });
       console.log("🐝[DEBUG][Emote map] Refresh / Getting all emotes from backend:", resp);
+
+      // Test get the current user
+      const respUser = await chrome.runtime.sendMessage({ action: "getUserInfo" });
+      console.log("🐝[DEBUG][Emote map] Current user info:", respUser);
+
       if (!resp || !resp.success || !Array.isArray(resp.data)) return false;
       // Normalize into token map and a list suitable for the picker
       const base = new URL(API_URL, location.origin);
