@@ -112,48 +112,26 @@ class BeeHappyOverlayChat {
       await window.BeeHappyEmotes.init();
       this.emoteMap = window.BeeHappyEmotes.getMap();
       this.emoteRegex = window.BeeHappyEmotes.getRegex();
-      let list = window.BeeHappyEmotes.getList ? window.BeeHappyEmotes.getList() : [];
+      const lists = window.BeeHappyEmotes.getLists ? window.BeeHappyEmotes.getLists() : {};
+      const initialGlobal = Array.isArray(lists.global) ? lists.global : [];
+      const initialStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
 
-      // if (!list || !list.length) {
-      //   console.warn("🐝 Warning: Emote list is empty, emotes may not display correctly.");
-      //   console.log("🐝 [DEBUG][Overlay-chat][init]: Attempting to refresh from API...");
-      //   // Try to refresh from API
-      //   try {
-      //     const refreshResult = await window.BeeHappyEmotes.refreshFromApi();
-      //     if (refreshResult) {
-      //       this.emoteMap = window.BeeHappyEmotes.getMap();
-      //       this.emoteRegex = window.BeeHappyEmotes.getRegex();
-      //       list = window.BeeHappyEmotes.getList(); // ← Update the list variable with fresh data
-      //       console.log("🐝 [DEBUG][Overlay-chat][init]: Updated emote list after API:", list);
-      //     }
-      //   } catch (err) {
-      //     console.error("🐝 [DEBUG][Overlay-chat][init]: API refresh failed:", err);
-      //   }
-      // }
+      const mergeListsToImageMap = (globalList = [], streamerList = []) => {
+        return [...globalList, ...streamerList].reduce((acc, item) => {
+          if (item && item.token) acc[item.token] = item.url || "";
+          return acc;
+        }, {});
+      };
 
-      // Emote image map object:
-      // {
-      //   "[bh:poggers]": "https://api.com/poggers.png",
-      //   "[bh:fire]": "https://api.com/fire.gif",
-      //   "[bh:kappa]": "https://api.com/kappa.jpg"
-      // }
-      this.emoteImageMap = Array.isArray(list)
-        ? list.reduce((acc, item) => {
-            if (item && item.token) acc[item.token] = item.url || "";
-            return acc;
-          }, {})
-        : {};
+      this.emoteImageMap = mergeListsToImageMap(initialGlobal, initialStreamer);
 
       // Subscribe to future updates
-      window.BeeHappyEmotes.onUpdate((map, regex, updatedList) => {
+      window.BeeHappyEmotes.onUpdate((map, regex, lists = {}) => {
         this.emoteMap = map || {};
         this.emoteRegex = regex || null;
-        if (Array.isArray(updatedList)) {
-          this.emoteImageMap = updatedList.reduce((acc, item) => {
-            if (item && item.token) acc[item.token] = item.url || "";
-            return acc;
-          }, {});
-        }
+        const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
+        const nextStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
+        this.emoteImageMap = mergeListsToImageMap(nextGlobal, nextStreamer);
       });
     } else {
       // Set time out and retries until init success
@@ -198,9 +176,10 @@ class BeeHappyOverlayChat {
         // Wait for overlay elements to be ready
         const emotePicker = document.getElementById("emotePicker");
         const emoteSearch = document.getElementById("emoteSearchInput");
-        const emoteGridBh = document.getElementById("emoteGridBeeHappy");
+        const emoteGridGlobal = document.getElementById("emoteGridGlobal");
+        const emoteGridStreamer = document.getElementById("emoteGridStreamer");
 
-        if (!emotePicker || !emoteSearch || !emoteGridBh) {
+        if (!emotePicker || !emoteSearch || !emoteGridGlobal || !emoteGridStreamer) {
           console.log("🐝 Waiting for emote picker elements...");
           setTimeout(initEmotePicker, 50); // Reduced delay
           return;
@@ -508,7 +487,7 @@ class BeeHappyOverlayChat {
       this.addMessageToOverlay(author, processedHtml);
 
       // Lookup BeeHappy user details in background (non-blocking)
-      this.lookupAndLogUser(author);
+      // this.lookupAndLogUser(author);
     } catch (error) {
       console.error("🐝 Error processing chat message:", error);
     }
@@ -567,11 +546,12 @@ class BeeHappyOverlayChat {
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         if (node.tagName === "IMG" && (node.classList.contains("emoji") || node.classList.contains("bh-emoji"))) {
           const clone = node.cloneNode(true);
-          clone.classList.add("bh-emoji");
+          clone.classList.add("yt-emoji-converted");
           if (clone.src) clone.setAttribute("src", clone.src);
           // Make sure the emoji image is appropriately sized
           clone.style.width = "24px";
           clone.style.height = "24px";
+          clone.style.verticalAlign = "middle";
           wrapper.appendChild(clone);
         } else {
           const emojiImg = node.querySelector("img.emoji");
@@ -580,6 +560,7 @@ class BeeHappyOverlayChat {
             clone.classList.add("bh-emote");
             clone.style.width = "24px";
             clone.style.height = "24px";
+            clone.style.verticalAlign = "middle";
             if (clone.src) clone.setAttribute("src", clone.src);
             wrapper.appendChild(clone);
           } else {
@@ -610,23 +591,16 @@ class BeeHappyOverlayChat {
       noMessages.remove();
     }
 
-    // Create message element
-    // TODO: Premium features here
-    // TODO: Handle the gradient color
-    let user = window.BeeHappyUsers.getUser(author);
-    let userPaint = "#ffffff";
-    if (user && user.paint) {
-      userPaint = user.paint;
-    }
+    // Create message element with default styling
     const messageDiv = document.createElement("div");
     messageDiv.className = "chat-message";
     messageDiv.innerHTML = `
       <span class="message-author">${this.escapeHtml(author)}</span>
       <span class="message-content">${processedHtml}</span>
     `;
-    messageDiv.style.color = userPaint;
+    messageDiv.style.color = "#ffffff";
 
-    // Add to chat container
+    // Add to chat container immediately
     this.chatContainer.appendChild(messageDiv);
     this.messageCount++;
 
@@ -639,8 +613,30 @@ class BeeHappyOverlayChat {
       }
     }
 
-    // Auto-scroll to bottom
+    // Auto-scroll to bottom after rendering
     this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+
+    // Enhance styling with user data once available
+    // TODO: Handle gradient features
+    const getUserFn = window.BeeHappyUsers?.getUser;
+    if (typeof getUserFn === "function") {
+      Promise.resolve()
+        .then(() => getUserFn(author))
+        .then((user) => {
+          console.log("🐝 [Overlay][Users] Fetched user data for", author, user);
+          if (!user) return;
+          const paints = Array.isArray(user.paints) ? user.paints : [];
+          const firstPaint = paints[0];
+          const color = typeof firstPaint === "string" ? firstPaint : firstPaint?.color;
+          console.log("[Overlay][Users] Applying color", color, "for user", author);
+          if (color) {
+            messageDiv.style.color = color;
+          }
+        })
+        .catch((error) => {
+          console.warn("🐝 [Overlay][Users] Failed to style message for", author, error);
+        });
+    }
   }
 
   escapeHtml(text) {
@@ -715,40 +711,40 @@ class BeeHappyOverlayChat {
     }
   }
 
-  lookupAndLogUser(author) {
-    if (!author) return;
-    const trimmed = author.trim();
-    if (!trimmed) return;
-    const key = trimmed.toLowerCase();
-    if (this.loggedUsers.has(key)) {
-      return;
-    }
-    if (!window.BeeHappyUsers || typeof window.BeeHappyUsers.updateUserList !== "function") {
-      return;
-    }
+  // lookupAndLogUser(author) {
+  //   if (!author) return;
+  //   const trimmed = author.trim();
+  //   if (!trimmed) return;
+  //   const key = trimmed.toLowerCase();
+  //   if (this.loggedUsers.has(key)) {
+  //     return;
+  //   }
+  //   if (!window.BeeHappyUsers || typeof window.BeeHappyUsers.updateUserList !== "function") {
+  //     return;
+  //   }
 
-    this.loggedUsers.add(key);
+  //   this.loggedUsers.add(key);
 
-    window.BeeHappyUsers.updateUserList(trimmed)
-      .then((user) => {
-        if (user) {
-          console.log("🐝 [Overlay][Users] Fetched user info:", trimmed, user);
-        } else {
-          this.loggedUsers.delete(key);
-        }
-      })
-      .catch((error) => {
-        this.loggedUsers.delete(key);
-        console.warn("🐝 [Overlay][Users] Failed to fetch user info for", trimmed, error);
-      })
-      .finally(() => {
-        // Log the final array of users
-        var snapshot = window.BeeHappyUsers.cache;
-        for (const [normalizedName, user] of snapshot) {
-          console.log("Cached user: ", normalizedName, user);
-        }
-      });
-  }
+  //   window.BeeHappyUsers.updateUserList(trimmed)
+  //     .then((user) => {
+  //       if (user) {
+  //         console.log("🐝 [Overlay][Users] Fetched user info:", trimmed, user);
+  //       } else {
+  //         this.loggedUsers.delete(key);
+  //       }
+  //     })
+  //     .catch((error) => {
+  //       this.loggedUsers.delete(key);
+  //       console.warn("🐝 [Overlay][Users] Failed to fetch user info for", trimmed, error);
+  //     })
+  //     .finally(() => {
+  //       // Log the final array of users
+  //       var snapshot = window.BeeHappyUsers.cache;
+  //       for (const [normalizedName, user] of snapshot) {
+  //         console.log("Cached user: ", normalizedName, user);
+  //       }
+  //     });
+  // }
 }
 
 // Export for use in content script

@@ -13,20 +13,23 @@ class BeeHappyEmoteReplacer {
     this.updateEmoteImageMap();
 
     // Subscribe for future updates (e.g., API refresh)
-    window.BeeHappyEmotes?.onUpdate((map, regex, updatedList) => {
-      console.log("[Content Script] Emote map updated:", map, regex, updatedList);
+    window.BeeHappyEmotes?.onUpdate((map, regex, lists = {}) => {
+      console.log("[Content Script] Emote map updated:", map, regex, lists);
       // Update internal maps so our replacer can act on new emotes immediately
       this.emoteMap = map || this.emoteMap;
       this.tokenRegex = regex || this.tokenRegex;
 
       // Update image map when emotes are refreshed (if a list was provided)
-      if (Array.isArray(updatedList)) {
-        this.emoteImageMap = updatedList.reduce((acc, item) => {
+      const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
+      const nextStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
+      const allEntries = [...nextGlobal, ...nextStreamer];
+      if (allEntries.length) {
+        this.emoteImageMap = allEntries.reduce((acc, item) => {
           if (item && item.token) acc[item.token] = item.url || "";
           return acc;
         }, {});
       } else {
-        // Fallback to reading from the exposed API list
+        // Fallback to reading from the exposed API lists
         this.updateEmoteImageMap();
       }
 
@@ -36,13 +39,14 @@ class BeeHappyEmoteReplacer {
   }
 
   updateEmoteImageMap() {
-    const list = window.BeeHappyEmotes?.getList ? window.BeeHappyEmotes.getList() : [];
-    this.emoteImageMap = Array.isArray(list)
-      ? list.reduce((acc, item) => {
-          if (item && item.token) acc[item.token] = item.url || "";
-          return acc;
-        }, {})
-      : {};
+    const lists = window.BeeHappyEmotes?.getLists ? window.BeeHappyEmotes.getLists() : {};
+    const globalList = Array.isArray(lists.global) ? lists.global : [];
+    const streamerList = Array.isArray(lists.streamer) ? lists.streamer : [];
+    const entries = [...globalList, ...streamerList];
+    this.emoteImageMap = entries.reduce((acc, item) => {
+      if (item && item.token) acc[item.token] = item.url || "";
+      return acc;
+    }, {});
   }
 
   replaceEmotes() {

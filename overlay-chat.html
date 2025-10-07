@@ -257,6 +257,14 @@
         gap: 8px;
       }
 
+      .picker-empty {
+        grid-column: 1 / -1;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 13px;
+        padding: 24px 0;
+      }
+
       .hidden {
         display: none;
       }
@@ -294,11 +302,8 @@
       }
 
       .chat-message {
-        /* display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: flex-start; */
-        /* gap: 8px; */
+        display: flex;
+        align-items: center;
         padding: 10px 12px;
         background: var(--dark-surface);
         /* border: 1px solid var(--dark-border); */
@@ -313,7 +318,8 @@
       .message-author {
         font-size: 12px;
         font-weight: 600;
-        color: white;
+        /* This one is handled on the overlay chat side */
+        /* color: white; */
         display: inline-flex;
         align-items: center;
         flex-shrink: 0;
@@ -464,10 +470,13 @@
                 autocomplete="off"
               />
             </div>
+            <div class="picker-tabs" role="tablist" aria-label="Emote sources">
+              <button class="picker-tab active" data-tab="global" role="tab" aria-selected="true">Global</button>
+              <button class="picker-tab" data-tab="streamer" role="tab" aria-selected="false">Streamer</button>
+            </div>
             <div class="picker-content">
-              <div class="emote-grid" id="emoteGridBeeHappy" role="listbox" aria-label="BeeHappy emotes">
-                <!-- BeeHappy emotes will be loaded here -->
-              </div>
+              <div class="emote-grid" id="emoteGridGlobal" role="tabpanel" aria-label="Global emotes"></div>
+              <div class="emote-grid hidden" id="emoteGridStreamer" role="tabpanel" aria-label="Streamer emotes"></div>
             </div>
           </div>
         </div>

@@ -8,8 +8,29 @@
   const state = {
     map: null, // token → replacement text
     regex: null, // combined token regex
-    list: [], // [{ token, name, url }]
+    globalList: [],
+    streamerList: [],
+    meta: {
+      streamer: null,
+    },
     listeners: [],
+  };
+
+  const slugify = (s) =>
+    (s || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "unsupported_emote_name";
+
+  const toAbsoluteUrl = (base, value) => {
+    if (!value) return "";
+    try {
+      return new URL(value, base).toString();
+    } catch (_) {
+      return String(value || "");
+    }
   };
 
   function buildRegex(map) {
@@ -53,9 +74,39 @@
       const resp = await sendRuntimeMessage({ action: "fetch_emotes", url: API_URL });
       console.log("🐝[DEBUG][Emote map] Refresh / Getting all emotes from backend:", resp);
 
-      // Test get the current streamer name
-      const currentStreamer = window.BeeHappyUsers.getCurrentStreamer();
+      const next = Object.create(null);
+      const globalList = [];
+      const streamerList = [];
+
+      if (resp?.success && Array.isArray(resp.data)) {
+        const globalBase = new URL(API_URL, location.origin);
+        resp.data.forEach((item) => {
+          if (!item || typeof item.name !== "string") return;
+          const slug = slugify(item.name);
+          const token = `${slug}`;
+          const files = Array.isArray(item.files) ? item.files : [];
+          const file = files.length ? files[files.length - 1] : null;
+          const url = file?.url ? toAbsoluteUrl(globalBase, file.url) : "";
+          const byUser = item.byUser || item.ownerName || "unknown";
+          const entry = { token, name: item.name, url, byUser, origin: "global" };
+          globalList.push(entry);
+          next[token] = item.name;
+        });
+      } else {
+        console.warn("🐝[Emote map] Failed to load global emotes", resp);
+        if (Array.isArray(state.globalList) && state.globalList.length) {
+          globalList.push(...state.globalList);
+          state.globalList.forEach((item) => {
+            if (item && item.token && !next[item.token]) {
+              next[item.token] = item.name;
+            }
+          });
+        }
+      }
+
+      const currentStreamer = window.BeeHappyUsers?.getCurrentStreamer?.();
       console.log("🐝[DEBUG][Emote map] Current streamer: ", currentStreamer);
+      let streamerMeta = null;
       if (currentStreamer) {
         console.log("🐝[DEBUG][Emote map] Current streamer name:", currentStreamer);
         const streamerUrl = `${API_URL}/sets/user/${encodeURIComponent(currentStreamer)}`;
@@ -65,52 +116,83 @@
           url: streamerUrl,
         });
         console.log("🐝[DEBUG][Emote map] Emote set for streamer", currentStreamer, ":", streamerResp);
+
+        if (streamerResp?.success) {
+          const rawStreamerData = streamerResp.data;
+          streamerMeta = {
+            name: currentStreamer,
+            setId: rawStreamerData?.id || null,
+            ownerId: rawStreamerData?.ownerId || null,
+            raw: rawStreamerData || null,
+          };
+
+          const emotesFromStreamer = Array.isArray(rawStreamerData?.emotes)
+            ? rawStreamerData.emotes
+            : Array.isArray(rawStreamerData)
+            ? rawStreamerData
+            : Array.isArray(streamerResp?.emotes)
+            ? streamerResp.emotes
+            : [];
+
+          if (Array.isArray(emotesFromStreamer) && emotesFromStreamer.length) {
+            const streamerBase = new URL(streamerUrl, location.origin);
+            const ownerName = rawStreamerData?.ownerName || currentStreamer;
+            emotesFromStreamer.forEach((item) => {
+              if (!item || typeof item.name !== "string") return;
+              const slug = slugify(item.name);
+              const token = `${slug}`;
+              const files = Array.isArray(item.files) ? item.files : [];
+              const file = files.length ? files[files.length - 1] : null;
+              const url = file?.url ? toAbsoluteUrl(streamerBase, file.url) : "";
+              const byUser = item.byUser || item.ownerName || ownerName || "unknown";
+              const entry = { token, name: item.name, url, byUser, origin: "streamer" };
+              streamerList.push(entry);
+              next[token] = item.name;
+            });
+          }
+        } else if (streamerResp && !streamerResp.success) {
+          console.warn("🐝[Emote map] Streamer emote fetch failed", streamerResp.error);
+        }
+
+        if (!streamerMeta && state.meta.streamer && state.meta.streamer.name === currentStreamer) {
+          streamerMeta = { ...state.meta.streamer };
+        }
+        if (
+          streamerList.length === 0 &&
+          Array.isArray(state.streamerList) &&
+          state.streamerList.length &&
+          state.meta.streamer &&
+          state.meta.streamer.name === currentStreamer
+        ) {
+          streamerList.push(...state.streamerList);
+        }
       }
 
-      if (!resp || !resp.success || !Array.isArray(resp.data)) return false;
-      // Normalize into token map and a list suitable for the picker
-      const base = new URL(API_URL, location.origin);
-      const toAbs = (u) => {
-        try {
-          return new URL(u, base).toString();
-        } catch (_) {
-          return String(u || "");
-        }
-      };
-
-      // Convert the name (including vietnamese) into suitable string for the emote picker
-      const slugify = (s) =>
-        (s || "")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, "") || "unsupported emote name";
-
-      const next = { ...state.map };
-      const list = [];
-      resp.data.forEach((item) => {
-        if (!item || typeof item.name !== "string") return;
-        const slug = slugify(item.name);
-        // const token = `[bh:${slug}]`;
-        const token = `${slug}`;
-        const file = Array.isArray(item.files) && item.files.length ? item.files[item.files.length - 1] : null;
-        // const file = Array.isArray(item.files) && item.files.length ? item.files[0] : null;
-        const url = file?.url ? toAbs(file.url) : "";
-        const byUser = item.byUser ? item.byUser : "unknown";
-        list.push({ token, name: item.name, url, byUser });
-        // TODO: Handle duplicate emote name ?
-        if (!next[token]) next[token] = item.name; // textual fallback replacement
-      });
+      const hasEmotes = globalList.length > 0 || streamerList.length > 0;
+      if (!hasEmotes && state.map && Object.keys(state.map).length) {
+        console.warn("🐝[Emote map] Refresh returned no emotes, keeping previous state");
+        _inFlight = false;
+        return false;
+      }
 
       // Update state, notify listeners
       state.map = next;
       state.regex = buildRegex(state.map);
-      state.list = list;
-      // await saveToStorage(state.map, state.list);
+      state.globalList = globalList;
+      state.streamerList = streamerList;
+      state.meta.streamer = streamerMeta;
+
       state.listeners.forEach((fn) => {
         try {
-          fn(state.map, state.regex, state.list);
+          const payload = {
+            global: state.globalList.slice(),
+            streamer: state.streamerList.slice(),
+            meta: {
+              ...state.meta,
+              streamer: state.meta.streamer ? { ...state.meta.streamer } : null,
+            },
+          };
+          fn(state.map, state.regex, payload);
         } catch (_) {}
       });
       _inFlight = false;
@@ -128,7 +210,18 @@
     },
     getMap: () => state.map,
     getRegex: () => state.regex,
-    getList: () => state.list,
+    getList: (scope = "global") => {
+      if (scope === "streamer") return state.streamerList.slice();
+      if (scope === "all") return state.globalList.concat(state.streamerList);
+      return state.globalList.slice();
+    },
+    getGlobalList: () => state.globalList.slice(),
+    getStreamerList: () => state.streamerList.slice(),
+    getLists: () => ({
+      global: state.globalList.slice(),
+      streamer: state.streamerList.slice(),
+    }),
+    getStreamerMeta: () => state.meta.streamer,
     onUpdate: (fn) => {
       if (typeof fn === "function") state.listeners.push(fn);
     },

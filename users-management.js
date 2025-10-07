@@ -76,11 +76,12 @@
             return;
           }
 
-          if (response?.success) {
+          if (response?.success && response.user) {
+            cacheUser(username, response.user);
             resolve(response.user);
           } else {
-            // reject(new Error(response?.error || "User lookup failed"));
-            console.log("🐝[Users] User lookup failed:", response?.error || "Unknown error");
+            const message = response?.error || "User lookup failed";
+            reject(new Error(message));
           }
         }
       );
