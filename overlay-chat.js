@@ -92,6 +92,7 @@ class BeeHappyOverlayChat {
     this.dragOffset = { x: 0, y: 0 };
     this.messageCount = 0;
     this.maxMessages = 50; // Limit messages to prevent memory issues
+    this.loggedUsers = new Set();
 
     // Centralized emote maps
     // this.emoteMap = (window.BeeHappyEmotes && window.BeeHappyEmotes.getMap()) || {};
@@ -113,22 +114,22 @@ class BeeHappyOverlayChat {
       this.emoteRegex = window.BeeHappyEmotes.getRegex();
       let list = window.BeeHappyEmotes.getList ? window.BeeHappyEmotes.getList() : [];
 
-      if (!list || !list.length) {
-        console.warn("🐝 Warning: Emote list is empty, emotes may not display correctly.");
-        console.log("🐝 [DEBUG][Overlay-chat][init]: Attempting to refresh from API...");
-        // Try to refresh from API
-        try {
-          const refreshResult = await window.BeeHappyEmotes.refreshFromApi();
-          if (refreshResult) {
-            this.emoteMap = window.BeeHappyEmotes.getMap();
-            this.emoteRegex = window.BeeHappyEmotes.getRegex();
-            list = window.BeeHappyEmotes.getList(); // ← Update the list variable with fresh data
-            console.log("🐝 [DEBUG][Overlay-chat][init]: Updated emote list after API:", list);
-          }
-        } catch (err) {
-          console.error("🐝 [DEBUG][Overlay-chat][init]: API refresh failed:", err);
-        }
-      }
+      // if (!list || !list.length) {
+      //   console.warn("🐝 Warning: Emote list is empty, emotes may not display correctly.");
+      //   console.log("🐝 [DEBUG][Overlay-chat][init]: Attempting to refresh from API...");
+      //   // Try to refresh from API
+      //   try {
+      //     const refreshResult = await window.BeeHappyEmotes.refreshFromApi();
+      //     if (refreshResult) {
+      //       this.emoteMap = window.BeeHappyEmotes.getMap();
+      //       this.emoteRegex = window.BeeHappyEmotes.getRegex();
+      //       list = window.BeeHappyEmotes.getList(); // ← Update the list variable with fresh data
+      //       console.log("🐝 [DEBUG][Overlay-chat][init]: Updated emote list after API:", list);
+      //     }
+      //   } catch (err) {
+      //     console.error("🐝 [DEBUG][Overlay-chat][init]: API refresh failed:", err);
+      //   }
+      // }
 
       // Emote image map object:
       // {
@@ -189,7 +190,7 @@ class BeeHappyOverlayChat {
         }
 
         document.head.appendChild(injectedStyles);
-        console.log("🐝 CSS styles injected");
+        // console.log("🐝 CSS styles injected");
       }
 
       // Initialize emote picker after overlay is ready
@@ -197,11 +198,9 @@ class BeeHappyOverlayChat {
         // Wait for overlay elements to be ready
         const emotePicker = document.getElementById("emotePicker");
         const emoteSearch = document.getElementById("emoteSearchInput");
-        const emoteGridYt = document.getElementById("emoteGridYoutube");
         const emoteGridBh = document.getElementById("emoteGridBeeHappy");
-        const pickerTabs = document.querySelectorAll(".picker-tab");
 
-        if (!emotePicker || !emoteSearch || !(emoteGridYt && emoteGridBh) || !pickerTabs.length) {
+        if (!emotePicker || !emoteSearch || !emoteGridBh) {
           console.log("🐝 Waiting for emote picker elements...");
           setTimeout(initEmotePicker, 50); // Reduced delay
           return;
@@ -285,10 +284,10 @@ class BeeHappyOverlayChat {
       this.overlay.style.display = "none";
       this.overlay.style.zIndex = window.BeeHappyConstants?.UI_CONFIG.OVERLAY_Z_INDEX || 10000;
 
-      console.log("🐝 Overlay created successfully");
-      console.log("🐝 Overlay element:", this.overlay);
-      console.log("🐝 Overlay parent:", this.overlay.parentElement);
-      console.log("🐝 Overlay in DOM:", document.contains(this.overlay));
+      // console.log("🐝 Overlay created successfully");
+      // console.log("🐝 Overlay element:", this.overlay);
+      // console.log("🐝 Overlay parent:", this.overlay.parentElement);
+      // console.log("🐝 Overlay in DOM:", document.contains(this.overlay));
 
       // Load saved position
       this.loadPosition();
@@ -308,7 +307,6 @@ class BeeHappyOverlayChat {
 
     const header = this.overlay.querySelector("#overlayHeader");
     const minimizeBtn = this.overlay.querySelector("#minimizeBtn");
-    // const testBtn = this.overlay.querySelector("#testBtn");
     const closeBtn = this.overlay.querySelector("#closeBtn");
 
     // Dragging functionality - exclude control buttons
@@ -322,17 +320,9 @@ class BeeHappyOverlayChat {
     document.addEventListener("mousemove", (e) => this.drag(e));
     document.addEventListener("mouseup", () => this.stopDrag());
 
-    // Emote selection events no longer add messages to overlay.
-    // Intentionally left blank to avoid duplicate UI writes.
-
     // Control buttons
     minimizeBtn.addEventListener("click", () => this.toggleMinimize());
-    // if (testBtn) {
-    //   testBtn.addEventListener("click", () => {
-    //     console.log("🐝 Overlay force test triggered");
-    //     // this.addTestMessage();
-    //   });
-    // }
+
     closeBtn.addEventListener("click", () => this.closeOverlay());
 
     // Prevent text selection while dragging
@@ -392,7 +382,7 @@ class BeeHappyOverlayChat {
   closeOverlay() {
     if (this.overlay) {
       this.overlay.style.display = "none";
-      console.log("🐝 Overlay hidden");
+      // console.log("🐝 Overlay hidden");
     }
   }
 
@@ -516,6 +506,9 @@ class BeeHappyOverlayChat {
 
       // Add message to overlay
       this.addMessageToOverlay(author, processedHtml);
+
+      // Lookup BeeHappy user details in background (non-blocking)
+      this.lookupAndLogUser(author);
     } catch (error) {
       console.error("🐝 Error processing chat message:", error);
     }
@@ -572,9 +565,9 @@ class BeeHappyOverlayChat {
       if (node.nodeType === Node.TEXT_NODE) {
         wrapper.appendChild(replaceTextWithNodes(node.textContent));
       } else if (node.nodeType === Node.ELEMENT_NODE) {
-        if (node.tagName === "IMG" && (node.classList.contains("emoji") || node.classList.contains("yt-emoji"))) {
+        if (node.tagName === "IMG" && (node.classList.contains("emoji") || node.classList.contains("bh-emoji"))) {
           const clone = node.cloneNode(true);
-          clone.classList.add("yt-emoji");
+          clone.classList.add("bh-emoji");
           if (clone.src) clone.setAttribute("src", clone.src);
           // Make sure the emoji image is appropriately sized
           clone.style.width = "24px";
@@ -619,12 +612,19 @@ class BeeHappyOverlayChat {
 
     // Create message element
     // TODO: Premium features here
+    // TODO: Handle the gradient color
+    let user = window.BeeHappyUsers.getUser(author);
+    let userPaint = "#ffffff";
+    if (user && user.paint) {
+      userPaint = user.paint;
+    }
     const messageDiv = document.createElement("div");
     messageDiv.className = "chat-message";
     messageDiv.innerHTML = `
-            <div class="message-author">${this.escapeHtml(author)}</div>
-            <div class="message-content">${processedHtml}</div>
-        `;
+      <span class="message-author">${this.escapeHtml(author)}</span>
+      <span class="message-content">${processedHtml}</span>
+    `;
+    messageDiv.style.color = userPaint;
 
     // Add to chat container
     this.chatContainer.appendChild(messageDiv);
@@ -668,7 +668,9 @@ class BeeHappyOverlayChat {
         this.overlay.style.right = "auto";
         this.overlay.style.bottom = "auto";
         defaultOverlayHeight = rect.height - 55 + "px";
+        // TODO: The chat of youtube sometime enlarged => need to monitor chatframe size change and adjust overlay height OR Allow user to readjust height
         this.overlay.style.height = defaultOverlayHeight; // 55 is the height of the chat input lol
+        this.overlay.style.width = rect.width + "px"; // Match chat iframe width
       } else {
         // Fallback to default position
         // this.overlay.style.position = "fixed";
@@ -711,6 +713,41 @@ class BeeHappyOverlayChat {
         }
       }
     }
+  }
+
+  lookupAndLogUser(author) {
+    if (!author) return;
+    const trimmed = author.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (this.loggedUsers.has(key)) {
+      return;
+    }
+    if (!window.BeeHappyUsers || typeof window.BeeHappyUsers.updateUserList !== "function") {
+      return;
+    }
+
+    this.loggedUsers.add(key);
+
+    window.BeeHappyUsers.updateUserList(trimmed)
+      .then((user) => {
+        if (user) {
+          console.log("🐝 [Overlay][Users] Fetched user info:", trimmed, user);
+        } else {
+          this.loggedUsers.delete(key);
+        }
+      })
+      .catch((error) => {
+        this.loggedUsers.delete(key);
+        console.warn("🐝 [Overlay][Users] Failed to fetch user info for", trimmed, error);
+      })
+      .finally(() => {
+        // Log the final array of users
+        var snapshot = window.BeeHappyUsers.cache;
+        for (const [normalizedName, user] of snapshot) {
+          console.log("Cached user: ", normalizedName, user);
+        }
+      });
   }
 }
 

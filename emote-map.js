@@ -28,23 +28,44 @@
     }
   }
 
+  const sendRuntimeMessage = (payload) =>
+    new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage(payload, (response) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(new Error(error.message));
+            return;
+          }
+          resolve(response);
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+
   let _inFlight = false;
   async function refreshFromApi() {
     // Ask background to fetch (handles CORS/timeouts)
     try {
-      if (_inFlight) {
-        console.log("🐝[DEBUG] refresh skipped (in flight)");
-        return false;
-      }
-
       _inFlight = true;
       // TODO: Handle get user emotes, current streamer emotes  + global emotes
-      const resp = await chrome.runtime.sendMessage({ action: "fetch_emotes", url: API_URL });
+      const resp = await sendRuntimeMessage({ action: "fetch_emotes", url: API_URL });
       console.log("🐝[DEBUG][Emote map] Refresh / Getting all emotes from backend:", resp);
 
-      // Test get the current user
-      const respUser = await chrome.runtime.sendMessage({ action: "getUserInfo" });
-      console.log("🐝[DEBUG][Emote map] Current user info:", respUser);
+      // Test get the current streamer name
+      const currentStreamer = window.BeeHappyUsers.getCurrentStreamer();
+      console.log("🐝[DEBUG][Emote map] Current streamer: ", currentStreamer);
+      if (currentStreamer) {
+        console.log("🐝[DEBUG][Emote map] Current streamer name:", currentStreamer);
+        const streamerUrl = `${API_URL}/sets/user/${encodeURIComponent(currentStreamer)}`;
+        const streamerResp = await sendRuntimeMessage({
+          action: window.BeeHappyConstants?.MESSAGE_ACTIONS?.FETCH_STREAMER_EMOTE_SET || "fetch_streamer_emote_set",
+          streamerName: currentStreamer,
+          url: streamerUrl,
+        });
+        console.log("🐝[DEBUG][Emote map] Emote set for streamer", currentStreamer, ":", streamerResp);
+      }
 
       if (!resp || !resp.success || !Array.isArray(resp.data)) return false;
       // Normalize into token map and a list suitable for the picker

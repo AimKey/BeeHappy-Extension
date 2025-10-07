@@ -63,6 +63,7 @@
     INJECT_HELPER: "inject_helper_all_frames",
     GET_EMOTES: "getEmotes",
     REFRESH_EMOTES: "refreshEmotes",
+    FETCH_STREAMER_EMOTE_SET: "fetch_streamer_emote_set",
   };
 
   // Expose constants globally
@@ -77,8 +78,8 @@
   };
 
   // Utility functions
-  // NOTE: TURN THIS VARIABLE OFF TO USE THE OFFICIAL URL
   window.BeeHappyConstants.getApiUrl = (endpoint = "") => {
+    // NOTE: TURN THIS VARIABLE OFF TO USE THE OFFICIAL URL
     const isDev = true;
     const baseUrl = isDev ? API_CONFIG.DEVELOPMENT_URL : API_CONFIG.PRODUCTION_URL;
     return baseUrl + endpoint;

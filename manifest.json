@@ -17,7 +17,14 @@
         "*://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/*",
         "https://localhost:7256/*"
       ],
-      "js": ["constants.js", "emote-map.js", "emote-picker.js", "overlay-chat.js", "content-script.js"],
+      "js": [
+        "constants.js",
+        "users-management.js",
+        "emote-map.js",
+        "emote-picker.js",
+        "overlay-chat.js",
+        "content-script.js"
+      ],
       "run_at": "document_end",
       "all_frames": true
     }

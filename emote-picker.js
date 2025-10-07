@@ -1,8 +1,6 @@
 class BeeHappyEmotePicker {
   constructor() {
-    this.currentTab = "youtube";
     this.emotes = {
-      youtube: [],
       beehappy: [],
     };
     this.searchTerm = "";
@@ -10,85 +8,6 @@ class BeeHappyEmotePicker {
     this.retryCount = 0;
     this.initialized = false;
     this.beeHappyRefreshedOnce = false;
-
-    // Common emoji list for YouTube tab
-    this.youtubeEmojis = [
-      "😀",
-      "😄",
-      "😁",
-      "😅",
-      "😂",
-      "🤣",
-      "😊",
-      "😇",
-      "🙂",
-      "🙃",
-      "😉",
-      "😌",
-      "😍",
-      "🥰",
-      "😘",
-      "😗",
-      "😙",
-      "😚",
-      "😋",
-      "😛",
-      "😝",
-      "😜",
-      "🤪",
-      "🤨",
-      "🧐",
-      "🤓",
-      "😎",
-      "🤩",
-      "🥳",
-      "😏",
-      "😒",
-      "😞",
-      "😔",
-      "😟",
-      "😕",
-      "🙁",
-      "☹️",
-      "😣",
-      "😖",
-      "😩",
-      "🥺",
-      "😢",
-      "😭",
-      "😤",
-      "😠",
-      "😡",
-      "🤬",
-      "🤯",
-      "😳",
-      "🥵",
-      "🥶",
-      "😱",
-      "😨",
-      "😰",
-      "😥",
-      "😓",
-      "🤗",
-      "🤔",
-      "🤭",
-      "🤫",
-      "🤥",
-      "😶",
-      "😐",
-      "😑",
-      "🙄",
-      "😯",
-      "😦",
-      "😧",
-      "😮",
-      "😲",
-      "🥱",
-      "😴",
-      "🤤",
-      "😪",
-      "😵",
-    ];
 
     // Start initialization
     this.init();
@@ -99,13 +18,10 @@ class BeeHappyEmotePicker {
       // Get elements
       this.picker = document.getElementById("emotePicker");
       this.searchInput = document.getElementById("emoteSearchInput");
-      // Two dedicated grids (one per tab)
-      this.emoteGridYoutube = document.getElementById("emoteGridYoutube");
       this.emoteGridBeeHappy = document.getElementById("emoteGridBeeHappy");
-      this.tabs = document.querySelectorAll(".picker-tab");
 
       // Wait for elements to be ready
-      while (!this.searchInput || !this.emoteGridYoutube || !this.emoteGridBeeHappy || !this.tabs) {
+      while (!this.searchInput || !this.emoteGridBeeHappy) {
         if (this.retryCount >= this.maxRetries) {
           console.warn("🐝 Element initialization timeout, will retry later");
           return;
@@ -114,9 +30,7 @@ class BeeHappyEmotePicker {
         // Try to get it again
         this.picker = document.getElementById("emotePicker");
         this.searchInput = document.getElementById("emoteSearchInput");
-        this.emoteGridYoutube = document.getElementById("emoteGridYoutube");
         this.emoteGridBeeHappy = document.getElementById("emoteGridBeeHappy");
-        this.tabs = document.querySelectorAll(".picker-tab");
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
@@ -166,22 +80,13 @@ class BeeHappyEmotePicker {
 
       if (Array.isArray(list)) {
         this.updateBeeHappyFromList(list);
-        this.renderInto("beehappy");
+        this.renderEmotes();
       }
     });
 
     console.log("🐝 [Picker] Pre-Loading emotes...");
     await this.loadEmotes();
-    // Preload both grids so switching tabs is instant
-    this.renderInto("youtube");
-    this.renderInto("beehappy");
-    // Ensure initial tab visibility and content
-    const yt = this.emoteGridYoutube;
-    const bh = this.emoteGridBeeHappy;
-    if (yt && bh) {
-      bh.classList.remove("hidden");
-      yt.classList.add("hidden");
-    }
+    this.renderEmotes();
   }
 
   setupEventListeners() {
@@ -192,60 +97,10 @@ class BeeHappyEmotePicker {
         this.renderEmotes();
       });
     }
-
-    // Tab switching
-    this.tabs.forEach((tab) => {
-      tab.addEventListener("click", () => {
-        // Remove active class from all tabs
-        this.tabs.forEach((t) => {
-          t.classList.remove("active");
-          t.setAttribute("aria-selected", "false");
-        });
-        // Add active class to clicked tab
-        tab.classList.add("active");
-        tab.setAttribute("aria-selected", "true");
-
-        this.currentTab = tab.dataset.tab;
-
-        // Update tabpanel
-        const yt = this.emoteGridYoutube;
-        const bh = this.emoteGridBeeHappy;
-        if (yt && bh) {
-          if (this.currentTab === "youtube") {
-            yt.classList.remove("hidden");
-            bh.classList.add("hidden");
-            yt.setAttribute("aria-labelledby", "youtube-tab");
-          } else {
-            bh.classList.remove("hidden");
-            yt.classList.add("hidden");
-            bh.setAttribute("aria-labelledby", "beehappy-tab");
-          }
-        }
-
-        // No auto-fetch on switch; grids are preloaded
-      });
-    });
-
-    // Close picker on escape key - DISABLED per user request
-    // document.addEventListener('keydown', (e) => {
-    //     if (e.key === 'Escape' && this.picker && this.picker.classList.contains('visible')) {
-    //         this.hidePicker();
-    //     }
-    // });
   }
-
-  // Event handler attachment removed - now handled directly in HTML
 
   async loadEmotes() {
     try {
-      // Load YouTube emojis first (these are local so they'll always work)
-      this.emotes.youtube = this.youtubeEmojis.map((emoji) => ({
-        id: emoji,
-        name: emoji,
-        type: "youtube",
-      }));
-
-      // Then load BeeHappy emotes from centralized list
       const list = window.BeeHappyEmotes?.getList?.();
       // console.log("🐝 [Picker] initial BeeHappy list:", list);
 
@@ -270,13 +125,6 @@ class BeeHappyEmotePicker {
     }
   }
 
-  renderInto(tab) {
-    const prev = this.currentTab;
-    this.currentTab = tab;
-    this.renderEmotes();
-    this.currentTab = prev;
-  }
-
   updateBeeHappyFromList(list) {
     this.emotes.beehappy = list.map((item) => ({
       id: item.token,
@@ -290,13 +138,13 @@ class BeeHappyEmotePicker {
   // ensureBeeHappyList removed – grids are preloaded and updated via onUpdate
 
   renderEmotes() {
-    const grid = this.currentTab === "youtube" ? this.emoteGridYoutube : this.emoteGridBeeHappy;
+    const grid = this.emoteGridBeeHappy;
     if (!grid) {
       console.warn("🐝 [Picker] renderEmotes: emoteGrid not ready");
       return;
     }
 
-    const emotes = this.emotes[this.currentTab] || [];
+    const emotes = this.emotes.beehappy || [];
     const filteredEmotes = this.searchTerm
       ? emotes.filter(
           (emote) =>
@@ -308,28 +156,29 @@ class BeeHappyEmotePicker {
     // Create elements using the same ownerDocument as the target grid
     const fragment = (grid?.ownerDocument || document).createDocumentFragment();
 
-    emotes.forEach((emote) => {
+    filteredEmotes.forEach((emote) => {
       const emoteElement = document.createElement("div");
       emoteElement.className = "emote-item";
       emoteElement.setAttribute("role", "button");
       emoteElement.setAttribute("aria-label", `Select emote ${emote.name}`);
 
-      if (emote.type === "youtube") {
-        const textNode = document.createTextNode(emote.name);
-        emoteElement.appendChild(textNode);
+      if (emote.url) {
+        const img = document.createElement("img");
+        img.setAttribute("src", emote.url);
+        img.setAttribute("alt", emote.name);
+        img.setAttribute("loading", "lazy");
+        img.setAttribute("width", "32");
+        img.setAttribute("height", "32");
+        img.style.maxWidth = "32px";
+        img.style.maxHeight = "32px";
+        img.style.display = "block";
+        emoteElement.appendChild(img);
       } else {
-        if (emote.url) {
-          const img = document.createElement("img");
-          img.setAttribute("src", emote.url);
-          img.setAttribute("alt", emote.name);
-          img.setAttribute("loading", "lazy");
-          img.setAttribute("width", "32");
-          img.setAttribute("height", "32");
-          img.style.maxWidth = "32px";
-          img.style.maxHeight = "32px";
-          img.style.display = "block";
-          emoteElement.appendChild(img);
-        }
+        const fallbackText = document.createElement("span");
+        fallbackText.textContent = emote.name;
+        fallbackText.style.fontSize = "18px";
+        fallbackText.style.fontWeight = "600";
+        emoteElement.appendChild(fallbackText);
       }
 
       // Tooltip logic

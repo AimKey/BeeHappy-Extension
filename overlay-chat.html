@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      * {
+      /* * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
-      }
+      } */
 
       :root {
         --primary: #7c3aed;
@@ -290,17 +290,18 @@
         padding: 12px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
         background: var(--dark-bg);
       }
 
       .chat-message {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+        /* display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-start; */
+        /* gap: 8px; */
         padding: 10px 12px;
         background: var(--dark-surface);
-        border: 1px solid var(--dark-border);
+        /* border: 1px solid var(--dark-border); */
         border-radius: 8px;
         transition: background 0.15s ease;
       }
@@ -313,9 +314,12 @@
         font-size: 12px;
         font-weight: 600;
         color: white;
-        display: flex;
+        display: inline-flex;
         align-items: center;
+        flex-shrink: 0;
+        white-space: nowrap;
         gap: 6px;
+        margin-right: 4px;
       }
 
       .message-author::before {
@@ -332,8 +336,10 @@
         font-size: 13px;
         color: var(--text-primary);
         line-height: 1.4;
-        word-wrap: break-word;
-        margin-left: 20px;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       .overlay-footer {
@@ -458,33 +464,8 @@
                 autocomplete="off"
               />
             </div>
-            <div class="picker-tabs" role="tablist" aria-label="Emote categories">
-              <button
-                class="picker-tab active"
-                role="tab"
-                aria-selected="false"
-                aria-controls="beehappy-emotes"
-                id="beehappy-tab"
-                data-tab="beehappy"
-              >
-                BeeHappy
-              </button>
-              <button
-                class="picker-tab"
-                role="tab"
-                aria-selected="true"
-                aria-controls="youtube-emotes"
-                id="youtube-tab"
-                data-tab="youtube"
-              >
-                YouTube
-              </button>
-            </div>
             <div class="picker-content">
-              <div class="emote-grid" id="emoteGridYoutube" role="tabpanel" aria-labelledby="youtube-tab">
-                <!-- YouTube emotes will be loaded here -->
-              </div>
-              <div class="emote-grid hidden" id="emoteGridBeeHappy" role="tabpanel" aria-labelledby="beehappy-tab">
+              <div class="emote-grid" id="emoteGridBeeHappy" role="listbox" aria-label="BeeHappy emotes">
                 <!-- BeeHappy emotes will be loaded here -->
               </div>
             </div>
