@@ -89,7 +89,10 @@ class BeeHappyOverlayChat {
     this.chatContainer = null;
     this.isMinimized = false;
     this.isDragging = false;
+    this.isResizing = false;
     this.dragOffset = { x: 0, y: 0 };
+    this.resizeStart = { x: 0, y: 0 };
+    this.originalSize = { width: 0, height: 0 };
     this.messageCount = 0;
     this.maxMessages = 50; // Limit messages to prevent memory issues
     this.loggedUsers = new Set();
@@ -271,6 +274,75 @@ class BeeHappyOverlayChat {
       // Load saved position
       this.loadPosition();
 
+      // Ensure there are resize handles: corner, right-edge, and bottom-edge.
+      // This allows resizing from the edges as well as the corner.
+      let corner = this.overlay.querySelector(".beehappy-overlay-resizer-corner");
+      let rightEdge = this.overlay.querySelector(".beehappy-overlay-resizer-right");
+      let bottomEdge = this.overlay.querySelector(".beehappy-overlay-resizer-bottom");
+
+      // Create corner handle if missing (small square at bottom-right)
+      if (!corner) {
+        corner = document.createElement("div");
+        corner.className = "beehappy-overlay-resizer-corner";
+        corner.style.position = "absolute";
+        corner.style.width = "12px";
+        corner.style.height = "12px";
+        corner.style.right = "6px";
+        corner.style.bottom = "6px";
+        corner.style.cursor = "nwse-resize";
+        corner.style.zIndex = "10001";
+        corner.style.background = "transparent";
+        this.overlay.appendChild(corner);
+      }
+
+      // Create right-edge handle if missing (full-height thin strip on the right)
+      if (!rightEdge) {
+        rightEdge = document.createElement("div");
+        rightEdge.className = "beehappy-overlay-resizer-right";
+        rightEdge.style.position = "absolute";
+        rightEdge.style.top = "6px";
+        rightEdge.style.bottom = "6px";
+        rightEdge.style.right = "0px";
+        rightEdge.style.width = "10px";
+        rightEdge.style.cursor = "ew-resize";
+        rightEdge.style.zIndex = "10000";
+        rightEdge.style.background = "transparent";
+        this.overlay.appendChild(rightEdge);
+      }
+
+      // Create bottom-edge handle if missing (full-width thin strip on the bottom)
+      if (!bottomEdge) {
+        bottomEdge = document.createElement("div");
+        bottomEdge.className = "beehappy-overlay-resizer-bottom";
+        bottomEdge.style.position = "absolute";
+        bottomEdge.style.left = "6px";
+        bottomEdge.style.right = "6px";
+        bottomEdge.style.bottom = "0px";
+        bottomEdge.style.height = "10px";
+        bottomEdge.style.cursor = "ns-resize";
+        bottomEdge.style.zIndex = "10000";
+        bottomEdge.style.background = "transparent";
+        this.overlay.appendChild(bottomEdge);
+      }
+
+      // Bind resize handlers
+      this._onResizeMouseMove = this._onResizeMouseMove.bind(this);
+      this._onResizeMouseUp = this._onResizeMouseUp.bind(this);
+
+      // Wire mousedown on handles to kick off resize with the appropriate axis
+      corner.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        this.startResize(ev, "both");
+      });
+      rightEdge.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        this.startResize(ev, "x");
+      });
+      bottomEdge.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        this.startResize(ev, "y");
+      });
+
       // Now that overlay is in the DOM, start picker initialization
       initEmotePicker();
     } catch (error) {
@@ -356,6 +428,8 @@ class BeeHappyOverlayChat {
     const minimizeBtn = this.overlay.querySelector("#minimizeBtn");
     minimizeBtn.textContent = this.isMinimized ? "+" : "−";
     minimizeBtn.title = this.isMinimized ? "Restore" : "Minimize";
+    // Update chat sizing after minimize toggle
+    setTimeout(() => this._applyChatSizing(), 0);
   }
 
   closeOverlay() {
@@ -372,6 +446,8 @@ class BeeHappyOverlayChat {
     const position = {
       left: rect.left,
       top: rect.top,
+      width: rect.width,
+      height: rect.height,
     };
 
     chrome.storage.local.set({ bh_overlay_position: position });
@@ -385,6 +461,8 @@ class BeeHappyOverlayChat {
         this.overlay.style.left = pos.left + "px";
         this.overlay.style.top = pos.top + "px";
         this.overlay.style.right = "auto";
+        if (pos.width) this.overlay.style.width = pos.width + "px";
+        if (pos.height) this.overlay.style.height = pos.height + "px";
       }
     } catch (error) {
       console.log("🐝 No saved position found, using default");
@@ -570,15 +648,7 @@ class BeeHappyOverlayChat {
       }
     });
 
-    // Debug: Log what we're returning
-    const result = wrapper.innerHTML;
-    // if (result.includes("<img")) {
-    //   console.log("🐝 DEBUG: Images found in processed HTML:", result);
-    // }
-    // if (result.includes("[bh:")) {
-    //   console.log("🐝 DEBUG: Unprocessed tokens found:", result);
-    // }
-
+    const result = wrapper.innerHTML
     return result;
   }
 
@@ -598,6 +668,28 @@ class BeeHappyOverlayChat {
       <span class="message-author">${this.escapeHtml(author)}</span>
       <span class="message-content">${processedHtml}</span>
     `;
+
+    // If the message author is the current streamer, add a special class so CSS
+    // can display a crown or other highlight. Use available helper if present.
+    try {
+      const getStreamer = window.BeeHappyUsers?.getStreamerMeta;
+      if (typeof getStreamer === "function") {
+        const streamerName = getStreamer().name;
+        if (streamerName) {
+          const norm = (s) => (s || "").toString().trim().toLowerCase();
+          if (norm(streamerName) === norm(author)) {
+            // add classes for styling (author span + message wrapper)
+            const authorSpan = messageDiv.querySelector(".message-author");
+            if (authorSpan) authorSpan.classList.add("message-author--streamer");
+            messageDiv.classList.add("chat-message--streamer");
+            // also mark attribute for possible JS hooks
+            messageDiv.setAttribute("data-streamer", "1");
+          }
+        }
+      }
+    } catch (e) {
+      // ignore streamer detection failures
+    }
     messageDiv.style.color = "#ffffff";
 
     // Add to chat container immediately
@@ -623,18 +715,18 @@ class BeeHappyOverlayChat {
       Promise.resolve()
         .then(() => getUserFn(author))
         .then((user) => {
-          console.log("🐝 [Overlay][Users] Fetched user data for", author, user);
+          // console.log("🐝 [Overlay][Users] Fetched user data for", author, user);
           if (!user) return;
           const paints = Array.isArray(user.paints) ? user.paints : [];
           const firstPaint = paints[0];
           const color = typeof firstPaint === "string" ? firstPaint : firstPaint?.color;
-          console.log("[Overlay][Users] Applying color", color, "for user", author);
+          // console.log("[Overlay][Users] Applying color", color, "for user", author);
           if (color) {
             messageDiv.style.color = color;
           }
         })
         .catch((error) => {
-          console.warn("🐝 [Overlay][Users] Failed to style message for", author, error);
+          // console.warn("🐝 [Overlay][Users] Failed to style message for", author, error);
         });
     }
   }
@@ -659,14 +751,19 @@ class BeeHappyOverlayChat {
         const rect = chatFrame.getBoundingClientRect();
         // Position overlay at the top-left of the chat iframe, with some offset
         // this.overlay.style.position = "fixed";
-        this.overlay.style.left = rect.left + "px";
-        this.overlay.style.top = rect.top + "px";
+        // If user previously resized/positioned, loadPosition() already applied sizes. Only set defaults when missing.
+        if (!this.overlay.style.left || this.overlay.style.left === "") this.overlay.style.left = rect.left + "px";
+        if (!this.overlay.style.top || this.overlay.style.top === "") this.overlay.style.top = rect.top + "px";
         this.overlay.style.right = "auto";
         this.overlay.style.bottom = "auto";
-        defaultOverlayHeight = rect.height - 55 + "px";
-        // TODO: The chat of youtube sometime enlarged => need to monitor chatframe size change and adjust overlay height OR Allow user to readjust height
-        this.overlay.style.height = defaultOverlayHeight; // 55 is the height of the chat input lol
-        this.overlay.style.width = rect.width + "px"; // Match chat iframe width
+        // Default height/width from chatframe if user hasn't set them
+        if (!this.overlay.style.height || this.overlay.style.height === "") {
+          defaultOverlayHeight = rect.height - 55 + "px";
+          this.overlay.style.height = defaultOverlayHeight; // 55 is the height of the chat input
+        }
+        if (!this.overlay.style.width || this.overlay.style.width === "") {
+          this.overlay.style.width = rect.width + "px"; // Match chat iframe width
+        }
       } else {
         // Fallback to default position
         // this.overlay.style.position = "fixed";
@@ -681,9 +778,78 @@ class BeeHappyOverlayChat {
       if (this.chatContainer) {
         setTimeout(() => {
           this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+          // Ensure chat container sizing reflects overlay size
+          this._applyChatSizing();
         }, 0);
       }
     }
+  }
+
+  // Ensure chat container height/width follow overlay size so it becomes responsive
+  _applyChatSizing() {
+    if (!this.overlay || !this.chatContainer) return;
+    // Use clientHeight/clientWidth to operate on inner sizes (excludes borders)
+    const overlayRect = this.overlay.getBoundingClientRect();
+    const overlayInnerH = this.overlay.clientHeight || Math.round(overlayRect.height);
+    // Try to compute header height dynamically for better accuracy
+    let headerHeight = 56; // fallback
+    try {
+      const headerEl = this.overlay.querySelector("#overlayHeader") || this.overlay.querySelector(".overlay-header");
+      if (headerEl) headerHeight = Math.round(headerEl.getBoundingClientRect().height);
+    } catch (e) {
+      /* ignore and use fallback */
+    }
+    const bottomPadding = 12;
+    const contentH = Math.max(80, overlayInnerH - headerHeight - bottomPadding);
+    this.chatContainer.style.boxSizing = "border-box";
+    this.chatContainer.style.height = contentH + "px";
+    this.chatContainer.style.overflowY = "auto";
+  }
+
+  // axis: 'x' | 'y' | 'both'
+  startResize(ev, axis = "both") {
+    if (!this.overlay) return;
+    this.isResizing = true;
+    this.resizeAxis = axis;
+    this.resizeStart.x = ev.clientX;
+    this.resizeStart.y = ev.clientY;
+    const rect = this.overlay.getBoundingClientRect();
+    this.originalSize.width = rect.width;
+    this.originalSize.height = rect.height;
+    document.addEventListener("mousemove", this._onResizeMouseMove);
+    document.addEventListener("mouseup", this._onResizeMouseUp);
+    this.overlay.classList.add("resizing");
+  }
+
+  _onResizeMouseMove(ev) {
+    if (!this.isResizing) return;
+    const dx = ev.clientX - this.resizeStart.x;
+    const dy = ev.clientY - this.resizeStart.y;
+    const minW = 200;
+    const minH = 100;
+    const maxW = window.innerWidth - 20;
+    const maxH = window.innerHeight - 20;
+
+    if (this.resizeAxis === "both" || this.resizeAxis === "x") {
+      const newW = Math.round(this.originalSize.width + dx);
+      this.overlay.style.width = Math.min(maxW, Math.max(minW, newW)) + "px";
+    }
+
+    if (this.resizeAxis === "both" || this.resizeAxis === "y") {
+      const newH = Math.round(this.originalSize.height + dy);
+      this.overlay.style.height = Math.min(maxH, Math.max(minH, newH)) + "px";
+    }
+
+    this._applyChatSizing();
+  }
+
+  _onResizeMouseUp() {
+    if (!this.isResizing) return;
+    this.isResizing = false;
+    document.removeEventListener("mousemove", this._onResizeMouseMove);
+    document.removeEventListener("mouseup", this._onResizeMouseUp);
+    if (this.overlay) this.overlay.classList.remove("resizing");
+    this.savePosition();
   }
 
   hide() {

@@ -74,7 +74,7 @@ class BeeHappyEmotePicker {
     // Ensure centralized emote map is ready
     try {
       await window.BeeHappyEmotes?.init?.();
-    } catch (_) {}
+    } catch (_) { }
 
     // ✅ Subscribe to updates FIRST, before any loading
     window.BeeHappyEmotes?.onUpdate?.((map, regex, lists = {}) => {
@@ -151,6 +151,7 @@ class BeeHappyEmotePicker {
       url: item.url || "",
       type,
       label: item.name || item.token,
+      byUser: item.byUser || "Unknown user",
     }));
   }
 
@@ -238,16 +239,23 @@ class BeeHappyEmotePicker {
           tooltip.className = "bh-emote-tooltip";
           tooltip.style.position = "fixed";
           tooltip.style.zIndex = 10010;
-          tooltip.style.background = "#222";
+          // Visual style requested by user: translucent background, border, blur and shadow
+          tooltip.style.background = "rgba(0, 0, 0, 0.45)";
           tooltip.style.color = "#fff";
           tooltip.style.padding = "8px 12px";
-          tooltip.style.borderRadius = "8px";
-          tooltip.style.boxShadow = "0 2px 8px rgba(0,0,0,0.25)";
+          tooltip.style.borderRadius = "16px";
+          tooltip.style.boxShadow = "0 4px 30px rgba(0, 0, 0, 0.1)";
+          tooltip.style.backdropFilter = "blur(6.5px)";
+          tooltip.style.webkitBackdropFilter = "blur(6.5px)";
+          tooltip.style.border = "1px solid rgba(0, 0, 0, 0.3)";
           tooltip.style.fontSize = "14px";
           tooltip.style.pointerEvents = "none";
+          // Stack tooltip contents vertically so text lines appear one above the other
           tooltip.style.display = "flex";
+          tooltip.style.flexDirection = "column";
           tooltip.style.alignItems = "center";
-          tooltip.style.gap = "8px";
+          tooltip.style.justifyContent = "center";
+          tooltip.style.gap = "6px";
 
           if (emote.url) {
             const img = document.createElement("img");
@@ -266,10 +274,43 @@ class BeeHappyEmotePicker {
             tooltip.appendChild(span);
           }
 
+          // Create a text container so name + uploader stack and are centered
+          const textContainer = document.createElement("div");
+          textContainer.style.display = "flex";
+          textContainer.style.flexDirection = "column";
+          textContainer.style.alignItems = "center";
+          // Ensure the text sits slightly away from the image (6px)
+          textContainer.style.marginTop = "6px";
+          textContainer.style.lineHeight = "1.1";
+
           const nameSpan = document.createElement("span");
           nameSpan.textContent = emote.label || emote.name;
           nameSpan.style.fontWeight = "bold";
-          tooltip.appendChild(nameSpan);
+          nameSpan.style.textAlign = "center";
+          textContainer.appendChild(nameSpan);
+
+          // Show uploader information if available (support string or object shapes)
+          try {
+            let uploader = "Unknown";
+            if (emote && emote.byUser) {
+              if (typeof emote.byUser === "string") {
+                uploader = emote.byUser;
+              } else if (typeof emote.byUser === "object") {
+                uploader = emote.byUser.username || emote.byUser.name || emote.byUser.ownerName || "Unknown";
+              }
+            }
+            const uploaderSpan = document.createElement("div");
+            uploaderSpan.textContent = `By: ${uploader}`;
+            uploaderSpan.style.fontSize = "12px";
+            uploaderSpan.style.color = "#cfcfcf";
+            uploaderSpan.style.marginTop = "4px";
+            uploaderSpan.style.textAlign = "center";
+            textContainer.appendChild(uploaderSpan);
+          } catch (e) {
+            // ignore tooltip enrich failures
+          }
+
+          tooltip.appendChild(textContainer);
 
           document.body.appendChild(tooltip);
 
@@ -323,7 +364,7 @@ class BeeHappyEmotePicker {
         try {
           const ok = document.execCommand("copy");
           if (ok) copied = true;
-        } catch (_) {}
+        } catch (_) { }
         ta.remove();
         if (copied) {
           // Successfully copied via fallback
@@ -387,7 +428,7 @@ class BeeHappyEmotePicker {
         setTimeout(() => {
           try {
             toast.remove();
-          } catch (_) {}
+          } catch (_) { }
         }, 200);
       }, 1400);
     } catch (e) {

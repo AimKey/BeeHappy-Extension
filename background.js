@@ -27,8 +27,8 @@ const resolveEmoteBaseUrl = () => {
 // Handle API requests from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === BG_CONSTANTS.MESSAGE_ACTIONS.FETCH_EMOTES) {
-    console.log("Fetching from this link: ", request.url);
-    fetchEmotes(request.url)
+    // Log by action name only (do not include URL)
+    fetchEmotes(request.url, request.action)
       .then((data) => sendResponse({ success: true, data }))
       .catch((error) => {
         console.error(BG_CONSTANTS.LOG_PREFIX, "API Error:", error);
@@ -52,7 +52,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return false;
     }
 
-    fetchUserByName(url, token)
+    // Pass the action name for logging (no URLs)
+    fetchUserByName(url, token, request.action)
       .then((user) => sendResponse({ success: true, user }))
       .catch((error) => {
         // console.error("🐝 BeeHappy: User lookup failed", error);
@@ -142,8 +143,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Fetch emotes from BeeHappy API with proper headers and error handling
-async function fetchEmotes(url) {
+async function fetchEmotes(url, actionName = "fetch_emotes") {
   try {
+    const startedAt = Date.now();
+    console.log(BG_CONSTANTS.LOG_PREFIX, "Action start:", actionName, new Date(startedAt).toISOString());
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), BG_CONSTANTS.TIMEOUT_MS);
 
@@ -157,6 +161,9 @@ async function fetchEmotes(url) {
     });
 
     clearTimeout(timeoutId);
+
+    const duration = Date.now() - startedAt;
+    console.log(BG_CONSTANTS.LOG_PREFIX, `Action complete: ${actionName} status=${response.status} duration=${duration}ms`);
 
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`);
@@ -173,7 +180,10 @@ async function fetchEmotes(url) {
   }
 }
 
-async function fetchUserByName(url, token) {
+async function fetchUserByName(url, token, actionName = "fetch_user_by_name") {
+  const startedAt = Date.now();
+  console.log(BG_CONSTANTS.LOG_PREFIX, "Action start:", actionName, new Date(startedAt).toISOString());
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BG_CONSTANTS.TIMEOUT_MS);
 
@@ -191,11 +201,14 @@ async function fetchUserByName(url, token) {
 
     clearTimeout(timeoutId);
 
+    const duration = Date.now() - startedAt;
+    console.log(BG_CONSTANTS.LOG_PREFIX, `Action complete: ${actionName} status=${response.status} duration=${duration}ms`);
+
     if (!response.ok) {
       let bodyText = "";
       try {
         bodyText = await response.text();
-      } catch (_) {}
+      } catch (_) { }
       throw new Error(
         `User request failed: ${response.status} ${response.statusText}${bodyText ? ` | ${bodyText}` : ""}`
       );
@@ -204,6 +217,8 @@ async function fetchUserByName(url, token) {
     return response.json();
   } catch (error) {
     clearTimeout(timeoutId);
+    const duration = Date.now() - startedAt;
+    console.error(BG_CONSTANTS.LOG_PREFIX, `Action error: ${actionName} duration=${duration}ms`, error);
     if (error.name === "AbortError") {
       throw new Error("User request timed out");
     }

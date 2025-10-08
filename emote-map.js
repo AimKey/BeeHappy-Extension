@@ -41,10 +41,8 @@
 
   async function ensureInitialized() {
     if (state.map) {
-      console.log("[Emote map]: Initialized state: ", state);
       return true;
     } else {
-      console.log("[Emote map]: Initialized state: ", state);
       return false;
     }
   }
@@ -87,7 +85,7 @@
           const files = Array.isArray(item.files) ? item.files : [];
           const file = files.length ? files[files.length - 1] : null;
           const url = file?.url ? toAbsoluteUrl(globalBase, file.url) : "";
-          const byUser = item.byUser || item.ownerName || "unknown";
+          const byUser = item.byUser || "unknown";
           const entry = { token, name: item.name, url, byUser, origin: "global" };
           globalList.push(entry);
           next[token] = item.name;
@@ -105,7 +103,7 @@
       }
 
       const currentStreamer = window.BeeHappyUsers?.getCurrentStreamer?.();
-      console.log("🐝[DEBUG][Emote map] Current streamer: ", currentStreamer);
+      // console.log("🐝[DEBUG][Emote map] Current streamer: ", currentStreamer);
       let streamerMeta = null;
       if (currentStreamer) {
         console.log("🐝[DEBUG][Emote map] Current streamer name:", currentStreamer);
@@ -115,7 +113,7 @@
           streamerName: currentStreamer,
           url: streamerUrl,
         });
-        console.log("🐝[DEBUG][Emote map] Emote set for streamer", currentStreamer, ":", streamerResp);
+        // console.log("🐝[DEBUG][Emote map] Emote set for streamer", currentStreamer, ":", streamerResp);
 
         if (streamerResp?.success) {
           const rawStreamerData = streamerResp.data;
@@ -129,14 +127,13 @@
           const emotesFromStreamer = Array.isArray(rawStreamerData?.emotes)
             ? rawStreamerData.emotes
             : Array.isArray(rawStreamerData)
-            ? rawStreamerData
-            : Array.isArray(streamerResp?.emotes)
-            ? streamerResp.emotes
-            : [];
+              ? rawStreamerData
+              : Array.isArray(streamerResp?.emotes)
+                ? streamerResp.emotes
+                : [];
 
           if (Array.isArray(emotesFromStreamer) && emotesFromStreamer.length) {
             const streamerBase = new URL(streamerUrl, location.origin);
-            const ownerName = rawStreamerData?.ownerName || currentStreamer;
             emotesFromStreamer.forEach((item) => {
               if (!item || typeof item.name !== "string") return;
               const slug = slugify(item.name);
@@ -144,7 +141,8 @@
               const files = Array.isArray(item.files) ? item.files : [];
               const file = files.length ? files[files.length - 1] : null;
               const url = file?.url ? toAbsoluteUrl(streamerBase, file.url) : "";
-              const byUser = item.byUser || item.ownerName || ownerName || "unknown";
+              const byUser = item.byUser || "unknown";
+
               const entry = { token, name: item.name, url, byUser, origin: "streamer" };
               streamerList.push(entry);
               next[token] = item.name;
@@ -193,7 +191,7 @@
             },
           };
           fn(state.map, state.regex, payload);
-        } catch (_) {}
+        } catch (_) { }
       });
       _inFlight = false;
       return true;

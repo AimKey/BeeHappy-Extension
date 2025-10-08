@@ -1,18 +1,6 @@
 // BeeHappy Popup: Only overlay toggle and auth placeholder
 document.addEventListener("DOMContentLoaded", () => {
   const toggleBtn = document.getElementById("toggle-overlay");
-  const loginBtn = document.getElementById("login-btn");
-
-  // Handle login button click
-  loginBtn.addEventListener("click", async () => {
-    console.log("BeeHappy Popup: Starting login flow...");
-    // TODO: Replace this with the deployed auth URL
-    const devUrl = "https://localhost:7256/extension/AuthBridge";
-    const prodUrl = "https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/extension/AuthBridge";
-    chrome.tabs.create({
-      url: devUrl,
-    });
-  });
 
   toggleBtn.addEventListener("click", async () => {
     const originalText = toggleBtn.textContent;
