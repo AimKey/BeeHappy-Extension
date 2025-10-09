@@ -69,7 +69,6 @@
     // Ask background to fetch (handles CORS/timeouts)
     try {
       _inFlight = true;
-      // TODO: Handle get user emotes, current streamer emotes  + global emotes
       const resp = await sendRuntimeMessage({ action: "fetch_emotes", url: API_URL });
       console.log("🐝[DEBUG][Emote map] Refresh / Getting all emotes from backend:", resp);
 
@@ -82,7 +81,7 @@
         resp.data.forEach((item) => {
           if (!item || typeof item.name !== "string") return;
           const slug = slugify(item.name);
-          const token = `${slug}`;
+          const token = `[${slug}]`; // This is the one taht defines how users will type it
           const files = Array.isArray(item.files) ? item.files : [];
           const file = files.length ? files[files.length - 1] : null;
           const url = file?.url ? toAbsoluteUrl(globalBase, file.url) : "";
@@ -140,7 +139,7 @@
             emotesFromStreamer.forEach((item) => {
               if (!item || typeof item.name !== "string") return;
               const slug = slugify(item.name);
-              const token = `${slug}`;
+              const token = `[${slug}]`; // This is the one taht defines how users will type it
               const files = Array.isArray(item.files) ? item.files : [];
               const file = files.length ? files[files.length - 1] : null;
               const url = file?.url ? toAbsoluteUrl(streamerBase, file.url) : "";

@@ -8,6 +8,7 @@ let defaultOverlayHeight = -1;
 // --- If running inside a frame (chat iframe), bootstrap a helper observer that posts messages to parent ---
 // if (window.top !== window.self) {
 //   (function setupIframeHelper() {
+//     console.log("🐝[Iframe helper] Setting up chat observer in iframe:", window.location.href);
 //     try {
 //       const doc = document;
 //       const sendToParent = (author, text) => {
@@ -96,6 +97,7 @@ class BeeHappyOverlayChat {
     this.messageCount = 0;
     this.maxMessages = 50; // Limit messages to prevent memory issues
     this.loggedUsers = new Set();
+    this.userPositioned = false; // Track if user has positioned the overlay
 
     this.init();
   }
@@ -397,15 +399,8 @@ class BeeHappyOverlayChat {
     const x = e.clientX - this.dragOffset.x;
     const y = e.clientY - this.dragOffset.y;
 
-    // Keep overlay within viewport
-    const maxX = window.innerWidth - this.overlay.offsetWidth;
-    const maxY = window.innerHeight - this.overlay.offsetHeight;
-
-    const clampedX = Math.max(0, Math.min(x, maxX));
-    const clampedY = Math.max(0, Math.min(y, maxY));
-
-    this.overlay.style.left = clampedX + "px";
-    this.overlay.style.top = clampedY + "px";
+    this.overlay.style.left = x + "px";
+    this.overlay.style.top = y + "px";
     this.overlay.style.right = "auto";
   }
 
@@ -413,6 +408,7 @@ class BeeHappyOverlayChat {
     if (this.isDragging) {
       this.isDragging = false;
       this.overlay.style.cursor = "default";
+      this.userPositioned = true; // Mark that user has positioned the overlay
       this.savePosition();
     }
   }
@@ -460,6 +456,7 @@ class BeeHappyOverlayChat {
         this.overlay.style.right = "auto";
         if (pos.width) this.overlay.style.width = pos.width + "px";
         if (pos.height) this.overlay.style.height = pos.height + "px";
+        this.userPositioned = true; // Mark as user positioned since we loaded a saved position
       }
     } catch (error) {
       console.log("🐝 No saved position found, using default");
@@ -600,8 +597,8 @@ class BeeHappyOverlayChat {
           img.setAttribute("alt", token);
           img.setAttribute("src", url);
           img.setAttribute("loading", "lazy");
-          img.style.width = "24px";
-          img.style.height = "24px";
+          img.style.width = "32px";
+          img.style.height = "32px";
           img.style.verticalAlign = "middle";
           frag.appendChild(img);
         } else {
@@ -625,8 +622,8 @@ class BeeHappyOverlayChat {
           clone.classList.add("yt-emoji-converted");
           if (clone.src) clone.setAttribute("src", clone.src);
           // Make sure the emoji image is appropriately sized
-          clone.style.width = "24px";
-          clone.style.height = "24px";
+          clone.style.width = "32px";
+          clone.style.height = "32px";
           clone.style.verticalAlign = "middle";
           wrapper.appendChild(clone);
         } else {
@@ -634,8 +631,8 @@ class BeeHappyOverlayChat {
           if (emojiImg) {
             const clone = emojiImg.cloneNode(true);
             clone.classList.add("bh-emote");
-            clone.style.width = "24px";
-            clone.style.height = "24px";
+            clone.style.width = "32px";
+            clone.style.height = "32px";
             clone.style.verticalAlign = "middle";
             if (clone.src) clone.setAttribute("src", clone.src);
             wrapper.appendChild(clone);
@@ -750,8 +747,14 @@ class BeeHappyOverlayChat {
         // Position overlay at the top-left of the chat iframe, with some offset
         // this.overlay.style.position = "fixed";
         // If user previously resized/positioned, loadPosition() already applied sizes. Only set defaults when missing.
-        if (!this.overlay.style.left || this.overlay.style.left === "") this.overlay.style.left = rect.left + "px";
-        if (!this.overlay.style.top || this.overlay.style.top === "") this.overlay.style.top = rect.top + "px";
+        // Only set default position if user hasn't manually positioned the overlay
+        if (!this.userPositioned) {
+          const hasLeft = this.overlay.style.left && this.overlay.style.left !== "" && this.overlay.style.left !== "auto";
+          const hasTop = this.overlay.style.top && this.overlay.style.top !== "" && this.overlay.style.top !== "auto";
+
+          if (!hasLeft) this.overlay.style.left = rect.left + "px";
+          if (!hasTop) this.overlay.style.top = rect.top + "px";
+        }
         this.overlay.style.right = "auto";
         this.overlay.style.bottom = "auto";
         // Default height/width from chatframe if user hasn't set them
@@ -763,12 +766,14 @@ class BeeHappyOverlayChat {
           this.overlay.style.width = rect.width + "px"; // Match chat iframe width
         }
       } else {
-        // Fallback to default position
-        // this.overlay.style.position = "fixed";
-        this.overlay.style.top = "100px";
-        this.overlay.style.right = "20px";
-        this.overlay.style.left = "auto";
-        this.overlay.style.bottom = "auto";
+        // Fallback to default position only if user hasn't positioned it
+        if (!this.userPositioned) {
+          // this.overlay.style.position = "fixed";
+          this.overlay.style.top = "100px";
+          this.overlay.style.right = "20px";
+          this.overlay.style.left = "auto";
+          this.overlay.style.bottom = "auto";
+        }
         // this.overlay.style.height = "500px";
       }
       this.overlay.style.display = "flex";
@@ -856,21 +861,14 @@ class BeeHappyOverlayChat {
     }
   }
 
-  toggle() {
+  async toggle() {
     if (this.overlay) {
       const isCurrentlyVisible = this.overlay.style.display === "flex";
       if (isCurrentlyVisible) {
         this.hide();
       } else {
         this.show();
-        // After showing, ensure overlay is positioned on screen
-        const rect = this.overlay.getBoundingClientRect();
-        if (rect.right > window.innerWidth || rect.left < 0 || rect.top < 0 || rect.bottom > window.innerHeight) {
-          this.overlay.style.top = "100px";
-          this.overlay.style.right = "20px";
-          this.overlay.style.left = "auto";
-          this.overlay.style.bottom = "auto";
-        }
+        // Note: Removed viewport positioning restrictions to allow free dragging
       }
     }
   }

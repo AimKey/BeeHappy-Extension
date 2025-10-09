@@ -79,6 +79,7 @@ class BeeHappyEmoteReplacer {
     }
   }
 
+  // This one transform the message in youtube chat
   transformMessage(msg) {
     // If we already added our spans here, skip until YouTube re-renders
     const emoteClass = window.BeeHappyConstants?.UI_CONFIG?.EMOTE_CLASS || "bh-emote";
@@ -117,8 +118,8 @@ class BeeHappyEmoteReplacer {
           img.setAttribute("alt", token);
           img.setAttribute("src", url);
           img.setAttribute("loading", "lazy");
-          img.style.width = "24px";
-          img.style.height = "24px";
+          img.style.width = "32px";
+          img.style.height = "32px";
           img.style.verticalAlign = "middle";
           frag.appendChild(img);
         } else {
@@ -259,7 +260,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       case "toggleOverlay":
         if (overlayChat) {
           console.log("🐝 Toggling existing overlay chat");
-          overlayChat.toggle();
+          await overlayChat.toggle();
           sendResponse({ success: true, message: "Overlay toggled" });
         } else {
           // Try to initialize if not already done
@@ -267,7 +268,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
             try {
               console.log("🐝 Initializing new overlay chat instance");
               overlayChat = new BeeHappyOverlayChat();
-              overlayChat.toggle();
+              await overlayChat.toggle();
             } catch (error) {
               sendResponse({ success: false, error: "Failed to initialize overlay: " + error.message });
             }
