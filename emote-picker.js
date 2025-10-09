@@ -350,7 +350,7 @@ class BeeHappyEmotePicker {
     let copied = false;
     try {
       if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(textToCopy);
+        await navigator.clipboard.writeText(textToCopy + " ");
         copied = true;
       } else {
         // Fallback for environments without async clipboard API

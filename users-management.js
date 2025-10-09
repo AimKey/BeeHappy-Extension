@@ -10,9 +10,11 @@
     if (typeof window.BeeHappyConstants?.getApiUrl === "function") {
       return window.BeeHappyConstants.getApiUrl(`/api/users/name/${encoded}`);
     }
-
-    const fallbackBase = window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "https://localhost:7256";
-    return `${fallbackBase.replace(/\/$/, "")}/api/users/name/${encoded}`;
+    // Fallback: build from exposed API_CONFIG if available, else default to localhost
+    const dev = window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL;
+    const prod = window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL;
+    const base = dev || prod || "https://localhost:7256";
+    return `${base.replace(/\/$/, "")}/api/users/name/${encoded}`;
   };
 
   const userCache = new Map();

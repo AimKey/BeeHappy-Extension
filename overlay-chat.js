@@ -6,81 +6,81 @@
 let chatRootElement = null;
 let defaultOverlayHeight = -1;
 // --- If running inside a frame (chat iframe), bootstrap a helper observer that posts messages to parent ---
-if (window.top !== window.self) {
-  (function setupIframeHelper() {
-    try {
-      const doc = document;
-      const sendToParent = (author, text) => {
-        try {
-          window.parent.postMessage({ source: "BeeHappy", type: "chat_message", author, text }, "*");
-        } catch (err) {
-          // ignore postMessage failures
-        }
-      };
+// if (window.top !== window.self) {
+//   (function setupIframeHelper() {
+//     try {
+//       const doc = document;
+//       const sendToParent = (author, text) => {
+//         try {
+//           window.parent.postMessage({ source: "BeeHappy", type: "chat_message", author, text }, "*");
+//         } catch (err) {
+//           // ignore postMessage failures
+//         }
+//       };
 
-      const processMessageNode = (node) => {
-        try {
-          const author = node.querySelector("#author-name")?.textContent?.trim() || "";
-          const message = node.querySelector("#message")?.innerHTML || "";
-          if (author || message) sendToParent(author, message);
-        } catch (e) {
-          // ignore individual node errors
-        }
-      };
+//       const processMessageNode = (node) => {
+//         try {
+//           const author = node.querySelector("#author-name")?.textContent?.trim() || "";
+//           const message = node.querySelector("#message")?.innerHTML || "";
+//           if (author || message) sendToParent(author, message);
+//         } catch (e) {
+//           // ignore individual node errors
+//         }
+//       };
 
-      const scanExisting = () => {
-        const existing = doc.querySelectorAll("yt-live-chat-text-message-renderer");
-        existing.forEach(processMessageNode);
-      };
+//       const scanExisting = () => {
+//         const existing = doc.querySelectorAll("yt-live-chat-text-message-renderer");
+//         existing.forEach(processMessageNode);
+//       };
 
-      const attachObserver = (container) => {
-        if (!container) return false;
-        const observer = new MutationObserver((mutations) => {
-          mutations.forEach((m) => {
-            m.addedNodes.forEach((n) => {
-              if (n.nodeType === 1 && n.tagName === "YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER") {
-                processMessageNode(n);
-              } else if (n.querySelectorAll) {
-                const found = n.querySelectorAll("yt-live-chat-text-message-renderer");
-                found.forEach(processMessageNode);
-              }
-            });
-          });
-        });
-        observer.observe(container, { childList: true, subtree: true });
-        return true;
-      };
+//       const attachObserver = (container) => {
+//         if (!container) return false;
+//         const observer = new MutationObserver((mutations) => {
+//           mutations.forEach((m) => {
+//             m.addedNodes.forEach((n) => {
+//               if (n.nodeType === 1 && n.tagName === "YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER") {
+//                 processMessageNode(n);
+//               } else if (n.querySelectorAll) {
+//                 const found = n.querySelectorAll("yt-live-chat-text-message-renderer");
+//                 found.forEach(processMessageNode);
+//               }
+//             });
+//           });
+//         });
+//         observer.observe(container, { childList: true, subtree: true });
+//         return true;
+//       };
 
-      const tryStart = () => {
-        // common chat containers inside iframe
-        const selectors = [
-          "yt-live-chat-renderer #items",
-          "#items",
-          "yt-live-chat-item-list-renderer",
-          "#chat-messages",
-          "yt-live-chat-renderer",
-        ];
+//       const tryStart = () => {
+//         // common chat containers inside iframe
+//         const selectors = [
+//           "yt-live-chat-renderer #items",
+//           "#items",
+//           "yt-live-chat-item-list-renderer",
+//           "#chat-messages",
+//           "yt-live-chat-renderer",
+//         ];
 
-        for (const s of selectors) {
-          const c = doc.querySelector(s);
-          if (c) {
-            scanExisting();
-            attachObserver(c);
-            return;
-          }
-        }
+//         for (const s of selectors) {
+//           const c = doc.querySelector(s);
+//           if (c) {
+//             scanExisting();
+//             attachObserver(c);
+//             return;
+//           }
+//         }
 
-        // Retry after delay if not found
-        setTimeout(tryStart, 1500);
-      };
+//         // Retry after delay if not found
+//         setTimeout(tryStart, 1500);
+//       };
 
-      tryStart();
-    } catch (err) {
-      // If anything fails, retry once after a delay
-      setTimeout(setupIframeHelper, 2000);
-    }
-  })();
-}
+//       tryStart();
+//     } catch (err) {
+//       // If anything fails, retry once after a delay
+//       setTimeout(setupIframeHelper, 2000);
+//     }
+//   })();
+// }
 
 // --- Continue with main overlay class (top-frame behavior will run below) ---
 class BeeHappyOverlayChat {
@@ -97,21 +97,16 @@ class BeeHappyOverlayChat {
     this.maxMessages = 50; // Limit messages to prevent memory issues
     this.loggedUsers = new Set();
 
-    // Centralized emote maps
-    // this.emoteMap = (window.BeeHappyEmotes && window.BeeHappyEmotes.getMap()) || {};
-    // this.emoteRegex =
-    //   (window.BeeHappyEmotes && window.BeeHappyEmotes.getRegex && window.BeeHappyEmotes.getRegex()) || null;
-    // this.emoteImageMap = {};
-    // console.log("[Overlay-chat] Inited emote map: ", this.emoteMap);
-
     this.init();
   }
 
   async init() {
-    console.log("🐝 Initializing BeeHappy Overlay Chat...");
-    await this.createOverlay();
     // Ensure emote map is ready, and subscribe to updates
-    if (window.BeeHappyEmotes?.init) {
+    var isInited = await window.BeeHappyEmotes?.init();
+    console.log("[Overlay-chat] Initializing BeeHappy Overlay Chat, emote map status: ", isInited);
+    if (isInited) {
+      console.log("[Overlay-chat] Initializing emote map + picker...");
+      await this.createOverlay();
       await window.BeeHappyEmotes.init();
       this.emoteMap = window.BeeHappyEmotes.getMap();
       this.emoteRegex = window.BeeHappyEmotes.getRegex();
@@ -137,6 +132,7 @@ class BeeHappyOverlayChat {
         this.emoteImageMap = mergeListsToImageMap(nextGlobal, nextStreamer);
       });
     } else {
+      console.warn("[Overlay-chat] Some of the emote is not ready yet., retrying...");
       // Set time out and retries until init success
       setTimeout(() => {
         this.init();
@@ -222,6 +218,7 @@ class BeeHappyOverlayChat {
             try {
               if (window.BeeHappyEmotes && typeof window.BeeHappyEmotes.refreshFromApi === "function") {
                 const ok = await window.BeeHappyEmotes.refreshFromApi();
+                // this.startChatMonitoring();
                 refreshBtn.title = ok ? "Refreshed" : "Refresh failed";
               } else {
                 // Fallback: dispatch an event for other modules that may handle refresh
@@ -584,6 +581,7 @@ class BeeHappyOverlayChat {
         frag.appendChild(document.createTextNode(text));
         return frag;
       }
+
       this.emoteRegex.lastIndex = 0;
       let m;
       let last = 0; // The previous regex match end position

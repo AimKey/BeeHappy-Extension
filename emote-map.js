@@ -1,9 +1,9 @@
 // This function only provide the emote map and regex, it does not init anything.
 (function () {
   // const STORAGE_KEY = window.BeeHappyConstants?.STORAGE_KEYS?.EMOTE_MAP || "bh_emote_map_v1";
-  const API_URL =
-    window.BeeHappyConstants?.getApiUrl(window.BeeHappyConstants?.API_CONFIG?.EMOTES_ENDPOINT) ||
-    "https://localhost:7256/api/emotes";
+  const API_URL = (typeof window.BeeHappyConstants?.getApiUrl === "function"
+    ? window.BeeHappyConstants.getApiUrl(window.BeeHappyConstants?.API_CONFIG?.EMOTES_ENDPOINT)
+    : "https://localhost:7256/api/emotes");
 
   const state = {
     map: null, // token → replacement text
@@ -40,7 +40,8 @@
   }
 
   async function ensureInitialized() {
-    if (state.map) {
+    console.log("[Emote map] Init state:", state.map, " and regex:", state.regex);
+    if (state.map && state.regex) {
       return true;
     } else {
       return false;
@@ -107,7 +108,9 @@
       let streamerMeta = null;
       if (currentStreamer) {
         console.log("🐝[DEBUG][Emote map] Current streamer name:", currentStreamer);
-        const streamerUrl = `${API_URL}/sets/user/${encodeURIComponent(currentStreamer)}`;
+        const streamerUrl = (typeof window.BeeHappyConstants?.getApiUrl === "function"
+          ? window.BeeHappyConstants.getApiUrl(`/api/emotes/sets/user/${encodeURIComponent(currentStreamer)}`)
+          : `${API_URL}/sets/user/${encodeURIComponent(currentStreamer)}`);
         const streamerResp = await sendRuntimeMessage({
           action: window.BeeHappyConstants?.MESSAGE_ACTIONS?.FETCH_STREAMER_EMOTE_SET || "fetch_streamer_emote_set",
           streamerName: currentStreamer,
@@ -204,7 +207,10 @@
 
   window.BeeHappyEmotes = {
     init: async () => {
-      await ensureInitialized();
+      if (state.map && state.regex) return true;
+      console.log("[Emote map] Initializing again for those who called");
+      const ok = await refreshFromApi();
+      return ok && state.map && state.regex;
     },
     getMap: () => state.map,
     getRegex: () => state.regex,

@@ -31,7 +31,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["constants.js", "overlay-chat.html", "styles.css", "images/*"],
+      "resources": ["constants.js", "overlay-chat.html", "images/*"],
       "matches": [
         "*://*.youtube.com/*",
         "https://www.youtube.com/*",

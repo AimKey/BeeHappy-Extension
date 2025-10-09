@@ -158,7 +158,7 @@ class BeeHappyEmoteReplacer {
           this.transformMessage(msg);
         }
       });
-    } catch (_) {}
+    } catch (_) { }
   }
 
   startObserver() {
@@ -258,17 +258,16 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
       case "toggleOverlay":
         if (overlayChat) {
+          console.log("🐝 Toggling existing overlay chat");
           overlayChat.toggle();
           sendResponse({ success: true, message: "Overlay toggled" });
         } else {
           // Try to initialize if not already done
           if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
             try {
+              console.log("🐝 Initializing new overlay chat instance");
               overlayChat = new BeeHappyOverlayChat();
-              setTimeout(() => {
-                overlayChat.toggle();
-                sendResponse({ success: true, message: "Overlay initialized and toggled" });
-              }, 500);
+              overlayChat.toggle();
             } catch (error) {
               sendResponse({ success: false, error: "Failed to initialize overlay: " + error.message });
             }
@@ -293,12 +292,18 @@ function authMessageListener() {
   console.log("🐝 Setting up auth message listener...");
   window.addEventListener("message", async (event) => {
     console.log("🐝 Auth message event:", event);
-    // Only accept messages from your BeeHappy domain
-    if (
-      !event.origin.includes("https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net") &&
-      !event.origin.includes("https://localhost:7256")
-    ) {
-      console.warn("🐝 Ignoring message from unknown origin:", event.origin);
+    // Only accept messages from BeeHappy's configured API origins (prod or dev)
+    try {
+      const prodBase = window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "";
+      const devBase = window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "";
+      const allowed = [prodBase, devBase].filter(Boolean);
+      const ok = allowed.some((base) => event.origin && event.origin.includes(base));
+      if (!ok) {
+        console.warn("🐝 Ignoring message from unknown origin:", event.origin);
+        return;
+      }
+    } catch (e) {
+      console.warn("🐝 Origin check failed", e);
       return;
     }
 
@@ -360,8 +365,8 @@ if (window.top !== window) {
       if (!overlayChat) initializeOverlay();
     }, 3000);
   } else if (
-    window.location.href.includes("beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/") ||
-    window.location.href.includes("localhost:7256")
+    window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "") ||
+    window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "")
   ) {
     // We are in the auth bridge page, only init the listener
     authMessageListener();

@@ -78,12 +78,36 @@
   };
 
   // Utility functions
-  window.BeeHappyConstants.getApiUrl = (endpoint = "") => {
-    // NOTE: TURN THIS VARIABLE OFF TO USE THE OFFICIAL URL
-    const isDev = true;
-    const baseUrl = isDev ? API_CONFIG.DEVELOPMENT_URL : API_CONFIG.PRODUCTION_URL;
-    return baseUrl + endpoint;
+  // Simple single-source helper to get API URL. Pass `useDev` to override, otherwise the flag
+  // in API_CONFIG._useDev (default true) will be used. Use setApiUseDev to change and persist.
+  API_CONFIG._useDev = false;
+  window.BeeHappyConstants.getApiUrl = (endpoint = "", useDev) => {
+    const useDevFlag = typeof useDev === "boolean" ? useDev : !!API_CONFIG._useDev;
+    const baseUrl = useDevFlag ? API_CONFIG.DEVELOPMENT_URL : API_CONFIG.PRODUCTION_URL;
+    return (baseUrl || "") + (endpoint || "");
   };
+
+  // Setter to change which API base to use. Persists choice to chrome.storage.local
+  window.BeeHappyConstants.setApiUseDev = async (flag) => {
+    API_CONFIG._useDev = !!flag;
+    try {
+      await chrome.storage.local.set({ bh_use_dev_api: API_CONFIG._useDev });
+    } catch (e) {
+      console.warn("🐝 Failed to persist bh_use_dev_api", e);
+    }
+  };
+
+  // Load persisted preference (non-blocking)
+  (async () => {
+    try {
+      const stored = await chrome.storage.local.get(["bh_use_dev_api"]);
+      if (typeof stored.bh_use_dev_api !== "undefined") {
+        API_CONFIG._useDev = !!stored.bh_use_dev_api;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  })();
 
   window.BeeHappyConstants.log = (message, ...args) => {
     if (LOG_CONFIG.ENABLE_DEBUG) {

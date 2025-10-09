@@ -16,12 +16,21 @@ const API_DEFAULTS = {
   PRODUCTION_URL: "https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net",
   DEVELOPMENT_URL: "https://localhost:7256",
   EMOTES_ENDPOINT: "/api/emotes",
-  USE_DEV: true,
+  USE_DEV: false,
 };
 
-const resolveEmoteBaseUrl = () => {
+// Resolve the API host (no trailing endpoint). Use this to build specific endpoints.
+const resolveApiHost = () => {
   const base = API_DEFAULTS.USE_DEV ? API_DEFAULTS.DEVELOPMENT_URL : API_DEFAULTS.PRODUCTION_URL;
-  return `${base.replace(/\/$/, "")}${API_DEFAULTS.EMOTES_ENDPOINT}`;
+  return base.replace(/\/$/, "");
+};
+
+const resolveApiUrl = (endpoint = "") => {
+  const host = resolveApiHost();
+  console.log("🐝 BeeHappy: Resolved API URL:", host + endpoint);
+  if (!endpoint) return host;
+  // Ensure endpoint begins with '/'
+  return host + (endpoint.startsWith("/") ? endpoint : `/${endpoint}`);
 };
 
 // Handle API requests from content scripts
@@ -75,11 +84,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log("🐝 Get user info with token:", token);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const API_URL =
-          window.BeeHappyConstants?.getApiUrl(window.BeeHappyConstants?.API_CONFIG?.EMOTES_ENDPOINT) ||
-          "https://localhost:7256/api/emotes"; // FIXME: Change back the api route to prod later
+        // Build user info URL using the API host helper
+        const userInfoUrl = resolveApiUrl("/api/users/me");
 
-        return fetch(`${API_URL}/api/users/me`, {
+        return fetch(userInfoUrl, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -123,8 +131,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     console.log("🐝[background.js] Fetching emote set for streamer:", streamerName);
-    const baseUrl = resolveEmoteBaseUrl();
-    const fetchURL = url || `${baseUrl}/sets/user/${encodeURIComponent(streamerName)}`;
+    // Build streamer set URL using API host helper
+    const fetchURL = url || resolveApiUrl(`api/emotes/sets/user/${encodeURIComponent(streamerName)}`);
 
     fetchEmotes(fetchURL)
       .then((data) => {
