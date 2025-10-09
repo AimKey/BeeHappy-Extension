@@ -19,12 +19,13 @@ class BeeHappyEmotePicker {
       // Get elements
       this.picker = document.getElementById("emotePicker");
       this.searchInput = document.getElementById("emoteSearchInput");
+      this.searchResetBtn = document.getElementById("searchResetBtn");
       this.emoteGridGlobal = document.getElementById("emoteGridGlobal");
       this.emoteGridStreamer = document.getElementById("emoteGridStreamer");
       this.tabButtons = Array.from(document.querySelectorAll(".picker-tab"));
 
       // Wait for elements to be ready
-      while (!this.searchInput || !this.emoteGridGlobal || !this.emoteGridStreamer || this.tabButtons.length === 0) {
+      while (!this.searchInput || !this.searchResetBtn || !this.emoteGridGlobal || !this.emoteGridStreamer || this.tabButtons.length === 0) {
         if (this.retryCount >= this.maxRetries) {
           console.warn("🐝 Element initialization timeout, will retry later");
           return;
@@ -33,13 +34,14 @@ class BeeHappyEmotePicker {
         // Try to get it again
         this.picker = document.getElementById("emotePicker");
         this.searchInput = document.getElementById("emoteSearchInput");
+        this.searchResetBtn = document.getElementById("searchResetBtn");
         this.emoteGridGlobal = document.getElementById("emoteGridGlobal");
         this.emoteGridStreamer = document.getElementById("emoteGridStreamer");
         this.tabButtons = Array.from(document.querySelectorAll(".picker-tab"));
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
-      console.log("🐝 [Picker] All elements found, proceeding with initialization");
+      // console.log("🐝 [Picker] All elements found, proceeding with initialization");
 
       // Initialize once everything is ready
       if (!this.initialized) {
@@ -95,7 +97,22 @@ class BeeHappyEmotePicker {
     if (this.searchInput) {
       this.searchInput.addEventListener("input", () => {
         this.searchTerm = this.searchInput.value.toLowerCase();
+        this.updateResetButtonVisibility();
         this.renderEmotes();
+      });
+
+      // Clear search on Escape key
+      this.searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          this.clearSearch();
+        }
+      });
+    }
+
+    // Search reset button handler
+    if (this.searchResetBtn) {
+      this.searchResetBtn.addEventListener("click", () => {
+        this.clearSearch();
       });
     }
 
@@ -111,6 +128,42 @@ class BeeHappyEmotePicker {
 
     // Ensure the correct tab is visible on startup
     this.setActiveTab(this.activeTab);
+  }
+
+  clearSearch() {
+    if (this.searchInput) {
+      this.searchInput.value = "";
+      this.searchTerm = "";
+      this.updateResetButtonVisibility();
+      this.renderEmotes();
+      // Focus the search input after clearing
+      this.searchInput.focus();
+    }
+  }
+
+  updateResetButtonVisibility() {
+    if (this.searchResetBtn) {
+      const shouldShow = this.searchTerm && this.searchTerm.length > 0;
+      console.log("🐝 [Picker] updateResetButtonVisibility - searchTerm:", this.searchTerm, "shouldShow:", shouldShow);
+      if (shouldShow) {
+        this.searchResetBtn.classList.add("visible");
+      } else {
+        this.searchResetBtn.classList.remove("visible");
+      }
+    }
+  }
+
+  cleanupTooltips() {
+    // Remove any existing BeeHappy emote tooltips from the DOM
+    const existingTooltips = document.querySelectorAll(".bh-emote-tooltip");
+    existingTooltips.forEach(tooltip => {
+      try {
+        tooltip.remove();
+      } catch (e) {
+        // Ignore errors if tooltip is already removed
+      }
+    });
+    console.log("🐝 [Picker] Cleaned up", existingTooltips.length, "existing tooltips");
   }
 
   async loadEmotes() {
@@ -175,7 +228,7 @@ class BeeHappyEmotePicker {
   }
 
   renderEmotes() {
-    console.log("🐝 [Picker] Rendering emotes...");
+    // console.log("🐝 [Picker] Rendering emotes...");
     console.log("Global emotes: ", this.emotes.global);
     console.log("Streamer emotes: ", this.emotes.streamer);
 
@@ -185,6 +238,7 @@ class BeeHappyEmotePicker {
   }
 
   filterEmotes(emotes) {
+    // console.log("🐝 [Picker] Filtering emotes with searchTerm:", this.searchTerm);
     if (!this.searchTerm) return emotes;
     const term = this.searchTerm;
     return emotes.filter((emote) => {
@@ -199,6 +253,9 @@ class BeeHappyEmotePicker {
 
   renderGrid(grid, emotes) {
     if (!grid) return;
+
+    // Clean up any existing tooltips before re-rendering
+    this.cleanupTooltips();
 
     const filteredEmotes = this.filterEmotes(emotes || []);
     const fragment = (grid?.ownerDocument || document).createDocumentFragment();
@@ -220,10 +277,10 @@ class BeeHappyEmotePicker {
           img.setAttribute("src", emote.url);
           img.setAttribute("alt", emote.label || emote.name);
           img.setAttribute("loading", "lazy");
-          img.setAttribute("width", "32");
-          img.setAttribute("height", "32");
-          img.style.maxWidth = "32px";
-          img.style.maxHeight = "32px";
+          img.setAttribute("width", "36");
+          img.setAttribute("height", "36");
+          img.style.maxWidth = "36px";
+          img.style.maxHeight = "36px";
           img.style.display = "block";
           emoteElement.appendChild(img);
         } else {
@@ -382,6 +439,8 @@ class BeeHappyEmotePicker {
         }
       }
       this.hidePicker();
+      // Then reset the search bar
+      // this.clearSearch();
     }
   }
 
@@ -406,6 +465,7 @@ class BeeHappyEmotePicker {
       toast.style.opacity = "0";
       toast.style.transition = "opacity 180ms ease-in-out, transform 180ms ease-in-out";
       toast.style.pointerEvents = "none";
+      toast.style.fontSize = "18px";
 
       // Query for the overlay
       const overlay = document.querySelector("#overlay-footer");
@@ -443,6 +503,8 @@ class BeeHappyEmotePicker {
     }
 
     const isVisible = this.picker.classList.contains("visible");
+    console.log("🐝 [Picker] Toggling picker, currently visible:", isVisible);
+
     if (isVisible) {
       this.hidePicker();
     } else {
@@ -456,6 +518,8 @@ class BeeHappyEmotePicker {
       return;
     }
 
+    console.log("🐝 [Picker] Showing picker, current visibility:", this.picker.classList.contains("visible"));
+
     // Simply add the visible class
     this.picker.classList.add("visible");
 
@@ -467,44 +531,90 @@ class BeeHappyEmotePicker {
       emoteBtn.classList.add("active");
     }
 
+    // Update search term from current input value and reset button visibility
+    if (this.searchInput) {
+      console.log("🐝 [Picker] On show - input value:", this.searchInput.value, "searchTerm:", this.searchTerm);
+      this.searchTerm = this.searchInput.value.toLowerCase();
+      console.log("🐝 [Picker] Updated searchTerm to:", this.searchTerm);
+    }
+    this.updateResetButtonVisibility();
+
     // Focus the search input when picker opens
     if (this.searchInput) {
       setTimeout(() => this.searchInput.focus(), 100);
     }
+
+    console.log("🐝 [Picker] Picker shown successfully");
   }
 
   adjustPickerPosition() {
     if (!this.picker) return;
 
-    const rect = this.picker.getBoundingClientRect();
+    // Get the emote button position to determine optimal picker placement
+    const emoteBtn = document.getElementById("emoteBtn");
+    if (!emoteBtn) {
+      console.warn("🐝 [Picker] Emote button not found for positioning");
+      return;
+    }
+
+    const btnRect = emoteBtn.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
+    const pickerHeight = 250; // Updated to match new compact height
+    const margin = 6;
 
-    // If picker goes above viewport, position it below the button instead
-    if (rect.top < 0) {
+    console.log("🐝 [Picker] Positioning picker relative to button:", {
+      buttonTop: btnRect.top,
+      buttonBottom: btnRect.bottom,
+      viewportHeight,
+      pickerHeight,
+      spaceAbove: btnRect.top,
+      spaceBelow: viewportHeight - btnRect.bottom
+    });
+
+    // Determine if there's enough space above the button
+    const spaceAbove = btnRect.top;
+    const spaceBelow = viewportHeight - btnRect.bottom;
+    const preferBottom = spaceAbove < pickerHeight + margin && spaceBelow >= pickerHeight + margin;
+
+    if (preferBottom) {
+      // Position below button
+      console.log("🐝 [Picker] Positioning below button (insufficient space above)");
       this.picker.style.bottom = "auto";
       this.picker.style.top = "100%";
-      this.picker.style.marginTop = "8px";
+      this.picker.style.marginTop = margin + "px";
       this.picker.style.marginBottom = "0";
-      this.picker.style.borderRadius = "0 0 12px 12px";
+      this.picker.style.borderRadius = "0 0 8px 8px";
     } else {
-      // Reset to default position (above button)
+      // Position above button (default)
+      console.log("🐝 [Picker] Positioning above button (default)");
       this.picker.style.bottom = "100%";
       this.picker.style.top = "auto";
       this.picker.style.marginTop = "0";
-      this.picker.style.marginBottom = "8px";
-      this.picker.style.borderRadius = "12px";
+      this.picker.style.marginBottom = margin + "px";
+      this.picker.style.borderRadius = "8px";
     }
 
-    // If picker goes off the right edge, adjust right position
-    if (rect.right > viewportWidth) {
+    // Adjust horizontal position if picker goes off the right edge
+    const pickerRect = this.picker.getBoundingClientRect();
+    if (pickerRect.right > viewportWidth) {
+      console.log("🐝 [Picker] Adjusting horizontal position (off right edge)");
       this.picker.style.right = "0";
       this.picker.style.left = "auto";
+    } else {
+      // Reset to default horizontal position
+      this.picker.style.right = "auto";
+      this.picker.style.left = "0";
     }
   }
 
   hidePicker() {
     if (!this.picker) return;
+
+    // console.log("🐝 [Picker] Hiding picker");
+
+    // Clean up any existing tooltips before hiding
+    this.cleanupTooltips();
 
     // Simply remove the visible class
     this.picker.classList.remove("visible");
@@ -514,11 +624,18 @@ class BeeHappyEmotePicker {
       emoteBtn.classList.remove("active");
     }
 
-    // Clear search when hiding
+    // Clear search when hiding - ensure both input value and internal state are cleared
     if (this.searchInput) {
+      // console.log("🐝 [Picker] Clearing search on hide, previous value:", this.searchInput.value);
       this.searchInput.value = "";
       this.searchTerm = "";
+      this.updateResetButtonVisibility();
+      // Re-render emotes to show all emotes when search is cleared
+      this.renderEmotes();
+      // console.log("🐝 [Picker] Search cleared, input value:", this.searchInput.value, "searchTerm:", this.searchTerm);
     }
+
+    // console.log("🐝 [Picker] Picker hidden successfully");
   }
 }
 

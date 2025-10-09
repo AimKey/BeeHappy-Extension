@@ -118,8 +118,8 @@ class BeeHappyEmoteReplacer {
           img.setAttribute("alt", token);
           img.setAttribute("src", url);
           img.setAttribute("loading", "lazy");
-          img.style.width = "32px";
-          img.style.height = "32px";
+          img.style.width = "36px";
+          img.style.height = "auto";
           img.style.verticalAlign = "middle";
           frag.appendChild(img);
         } else {
@@ -267,7 +267,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
           if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
             try {
               console.log("🐝 Initializing new overlay chat instance");
-              overlayChat = new BeeHappyOverlayChat();
+              overlayChat = new BeeHappyControls();
               await overlayChat.toggle();
             } catch (error) {
               sendResponse({ success: false, error: "Failed to initialize overlay: " + error.message });
@@ -336,7 +336,7 @@ if (window.top !== window) {
     const initializeOverlay = () => {
       if (!overlayChat) {
         try {
-          overlayChat = new BeeHappyOverlayChat();
+          overlayChat = new BeeHappyControls();
           // // Ask background to inject helper into all frames
           // try {
           //   chrome.runtime.sendMessage({ action: "inject_helper_all_frames" }, (resp) => {
