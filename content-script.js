@@ -4,6 +4,7 @@ class BeeHappyEmoteReplacer {
     this.emoteMap = window.BeeHappyEmotes?.getMap() || {};
     this.observer = null;
     this.isProcessing = false;
+    this.listenerRegistered = false; // Add this flag
 
     // Use the centralized regex from emote-map.js instead of building our own
     this.tokenRegex = window.BeeHappyEmotes?.getRegex() || null;
@@ -12,38 +13,49 @@ class BeeHappyEmoteReplacer {
     this.emoteImageMap = {};
     this.updateEmoteImageMap();
 
-    // Subscribe for future updates (e.g., API refresh)
-    window.BeeHappyEmotes?.onUpdate(function contentScriptListener(map, regex, lists = {}) {
-      console.log("[Content Script] (onupdate) Emote map updated:", map, regex, lists);
+    // Only register once
+    if (!this.listenerRegistered) {
+      window.BeeHappyEmotes?.onUpdate(this.handleEmoteUpdate.bind(this));
+      this.listenerRegistered = true;
+    }
+  }
 
-      try {
-        // Update internal maps so our replacer can act on new emotes immediately
-        this.emoteMap = map || this.emoteMap;
-        this.tokenRegex = regex || this.tokenRegex;
+  handleEmoteUpdate(map, regex, lists) {
+    // Move listener logic to named method for better debugging
+    console.log("[ContentScript] (onupdate) New state:", {
+      mapSize: Object.keys(map).length,
+      hasRegex: !!regex,
+      globalCount: (lists.global || []).length,
+      streamerCount: (lists.streamer || []).length
+    });
+    try {
+      // Update internal maps so our replacer can act on new emotes immediately
+      this.emoteMap = map || this.emoteMap;
+      this.tokenRegex = regex || this.tokenRegex;
 
-        // Update image map when emotes are refreshed (if a list was provided)
-        const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
-        const nextStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
-        const allEntries = [...nextGlobal, ...nextStreamer];
-        if (allEntries.length) {
-          this.emoteImageMap = allEntries.reduce((acc, item) => {
-            if (item && item.token) acc[item.token] = item.url || "";
-            return acc;
-          }, {});
-        } else {
-          // Fallback to reading from the exposed API lists
-          this.updateEmoteImageMap();
-        }
-
-        // Re-scan messages on map update to apply new emotes
-        this.rescanExisting();
-
-        console.log("[Content Script] (onupdate) Successfully processed emote update");
-      } catch (error) {
-        console.error("[Content Script] (onupdate) Error processing emote update:", error);
-        throw error; // Re-throw so it's caught by the emote map error handler
+      // Update image map when emotes are refreshed (if a list was provided)
+      const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
+      const nextStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
+      const allEntries = [...nextGlobal, ...nextStreamer];
+      if (allEntries.length) {
+        this.emoteImageMap = allEntries.reduce((acc, item) => {
+          if (item && item.token) acc[item.token] = item.url || "";
+          return acc;
+        }, {});
+      } else {
+        // Fallback to reading from the exposed API lists
+        console.log("[ContentScript] (onupdate) No lists provided, rebuilding image map from API");
+        this.updateEmoteImageMap();
       }
-    }.bind(this));
+
+      // Re-scan messages on map update to apply new emotes
+      this.processMessages({ verbose: true });
+
+      console.log("[ContentScript] (onupdate) Successfully processed emote update");
+    } catch (error) {
+      console.error("[ContentScript] (onupdate) Error processing emote update:", error);
+      throw error; // Re-throw so it's caught by the emote map error handler
+    }
   }
 
   updateEmoteImageMap() {
@@ -57,7 +69,9 @@ class BeeHappyEmoteReplacer {
     }, {});
   }
 
-  replaceEmotes() {
+  processMessages(options = {}) {
+    const { verbose = false } = options;
+
     if (this.isProcessing) return;
     this.isProcessing = true;
 
@@ -77,6 +91,13 @@ class BeeHappyEmoteReplacer {
       }
 
       if (messages.length === 0) return;
+
+      if (verbose) {
+        console.log("[ContentScript] Processing emotes in", messages.length, "messages");
+        console.log("[ContentScript] Current emote map size:", Object.keys(this.emoteMap).length);
+        console.log("[ContentScript] Current emote image map size:", Object.keys(this.emoteImageMap).length);
+        console.log("[ContentScript] Current token regex:", this.tokenRegex);
+      }
 
       // DOM-safe replace: transform text nodes into spans without touching structure
       messages.forEach((msg) => this.transformMessage(msg));
@@ -144,32 +165,6 @@ class BeeHappyEmoteReplacer {
     });
   }
 
-  rescanExisting() {
-    try {
-      const selectors = [
-        "yt-live-chat-text-message-renderer #message",
-        "yt-live-chat-text-message-renderer .message",
-        'yt-live-chat-text-message-renderer span[id="message"]',
-        ".yt-live-chat-text-message-renderer #message",
-      ];
-      let messages = [];
-      for (const selector of selectors) {
-        messages = document.querySelectorAll(selector);
-        if (messages.length > 0) break;
-      }
-      if (!messages.length) return;
-      messages.forEach((msg) => {
-        // Only rescan messages that still contain tokens and no bh-emote yet
-        if (msg.querySelector(".bh-emote")) return;
-        const text = msg.textContent || "";
-        this.tokenRegex && (this.tokenRegex.lastIndex = 0);
-        if (this.tokenRegex && this.tokenRegex.test(text)) {
-          this.transformMessage(msg);
-        }
-      });
-    } catch (_) { }
-  }
-
   startObserver() {
     const chatContainer =
       document.querySelector("yt-live-chat-renderer") ||
@@ -182,6 +177,9 @@ class BeeHappyEmoteReplacer {
     }
 
     this.observer = new MutationObserver((mutations) => {
+      // Skip if already processing to avoid race conditions
+      if (this.isProcessing) return;
+
       let touched = false;
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
@@ -204,10 +202,6 @@ class BeeHappyEmoteReplacer {
           }
         });
       });
-      // Periodically rescan existing messages that might have been re-hydrated
-      if (touched) {
-        setTimeout(() => this.rescanExisting(), 200);
-      }
     });
 
     this.observer.observe(chatContainer, {
@@ -215,28 +209,37 @@ class BeeHappyEmoteReplacer {
       subtree: true,
     });
 
-    // Process existing and schedule rescans to catch rehydration
-    this.replaceEmotes();
-    setInterval(() => this.rescanExisting(), 2000);
+    // Process existing messages once on startup
+    this.processMessages({ verbose: true });
+    // Repeatedly rescan to catch rehydrated messages
+    setInterval(() => this.processMessages(), 1000);
   }
 
-  init() {
-    const start = async () => {
-      await (window.BeeHappyEmotes?.init?.() || Promise.resolve());
-      this.emoteMap = window.BeeHappyEmotes?.getMap() || this.emoteMap;
-      this.tokenRegex = window.BeeHappyEmotes?.getRegex() || this.tokenRegex;
-      // Update image map after initialization
-      this.updateEmoteImageMap();
-      this.startObserver();
-      // Optionally kick an early refresh (non-blocking)
-      window.BeeHappyEmotes?.refreshFromApi?.();
-    };
-    setTimeout(start, 1000);
+  async init() {
+    console.log("[ContentScript] Starting emote replacer initialization...");
+
+    // Wait for emote map to be ready (this should already be done by parent, but double-check)
+    await (window.BeeHappyEmotes?.init?.() || Promise.resolve());
+
+    // Get current state
+    this.emoteMap = window.BeeHappyEmotes?.getMap() || this.emoteMap;
+    this.tokenRegex = window.BeeHappyEmotes?.getRegex() || this.tokenRegex;
+
+    // Update image map after initialization
+    this.updateEmoteImageMap();
+
+    console.log("[ContentScript] Starting chat observer...");
+    this.startObserver();
+
+    console.log("[ContentScript] Emote replacer initialization complete");
   }
 }
 
 // Global overlay chat instance
 let overlayChat = null;
+// Global replacer instance - prevent multiple initializations
+let emoteReplacer = null;
+let isContentScriptInitialized = false;
 
 // Message handling for communication with popup and background
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
@@ -319,43 +322,97 @@ function authMessageListener() {
 
 // Initialize the BeeHappy system
 if (window.top !== window) {
-  // In iframe: only initialize emote replacer
-  const replacer = new BeeHappyEmoteReplacer();
-  replacer.init();
+  // We're in an iframe (in our case will be the youtube frame)- only initialize emote replacer
+  console.log("[ContentScript] In iframe: only initializing emote replacer");
+
+  // Wait for DOM to be ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      if (!emoteReplacer) {
+        emoteReplacer = new BeeHappyEmoteReplacer();
+        emoteReplacer.init();
+      }
+    });
+  } else {
+    if (!emoteReplacer) {
+      emoteReplacer = new BeeHappyEmoteReplacer();
+      emoteReplacer.init();
+    }
+  }
 } else {
   // In main page: check if we should initialize overlay
   if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
-    const initializeOverlay = () => {
-      if (!overlayChat) {
-        try {
-          overlayChat = new BeeHappyControls();
-          // // Ask background to inject helper into all frames
-          // try {
-          //   chrome.runtime.sendMessage({ action: "inject_helper_all_frames" }, (resp) => {
-          //     if (!resp?.success && resp?.error !== "scripting.executeScript not available") {
-          //       console.warn("🐝 inject_helper_all_frames failed:", resp?.error);
-          //     }
-          //   });
-          // } catch (e) {
-          //   // Ignore errors - iframe helper is optional
-          // }
-        } catch (error) {
-          console.error("🐝 Failed to initialize overlay:", error);
-          overlayChat = null;
+
+    const initializeOverlay = async () => {
+      // Prevent duplicate initialization
+      if (isContentScriptInitialized) {
+        console.log("[ContentScript] Already initialized, skipping");
+        return;
+      }
+
+      try {
+        // Wait for emote map to be ready first
+        console.log("[ContentScript] Waiting for emote map to be ready...");
+        var result = await window.BeeHappyEmotes?.init?.();
+
+        // Verify map and regex are available
+        // const map = window.BeeHappyEmotes?.getMap();
+        // const regex = window.BeeHappyEmotes?.getRegex();
+        // const streamer = window.BeeHappyEmotes?.getStreamerMeta();
+        // const isStreamerFetched = streamer && streamer.apiStatus === "fetch_success";
+        // console.log("[ContentScript] Emote map state:", {
+        //   mapSize: map ? Object.keys(map).length : 0,
+        //   hasRegex: !!regex,
+        //   isStreamerFetched,
+        //   streamerApiStatus: streamer?.apiStatus,
+        // });
+
+        if (!result) {
+          console.warn("[ContentScript] Emote map or regex not ready, or streamer not fetched, retrying...");
+          // Reset and allow retry
+          setTimeout(() => {
+            isContentScriptInitialized = false;
+            initializeOverlay();
+          }, 2000);
+          return;
         }
+
+        // console.log("[ContentScript] Emote map ready with", Object.keys(map).length, "emotes");
+
+        // Initialize emote replacer only once
+        // if (!emoteReplacer) {
+        //   emoteReplacer = new BeeHappyEmoteReplacer();
+        //   await emoteReplacer.init();
+        //   console.log("[ContentScript] Emote replacer initialized");
+        // }
+
+        // Initialize overlay only once
+        if (!overlayChat) {
+          overlayChat = new BeeHappyControls();
+          console.log("[ContentScript] Overlay chat initialized in main page");
+        }
+
+        isContentScriptInitialized = true;
+      } catch (error) {
+        console.error("[ContentScript] Failed to initialize:", error);
+        // Reset state on failure to allow retry
+        isContentScriptInitialized = false;
+        emoteReplacer = null;
+        overlayChat = null;
       }
     };
-    // Try to initialize as soon as possible
+    // Wait for DOM to be ready before initializing
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
-        setTimeout(initializeOverlay, 1000);
+        initializeOverlay();
       });
     } else {
-      setTimeout(initializeOverlay, 1000);
+      // DOM already ready
+      initializeOverlay();
     }
     // Also try after a delay for YouTube's dynamic loading
     setTimeout(() => {
-      if (!overlayChat) initializeOverlay();
+      if (!isContentScriptInitialized) initializeOverlay();
     }, 3000);
   } else if (
     window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "") ||

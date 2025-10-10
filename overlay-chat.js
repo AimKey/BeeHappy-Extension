@@ -21,35 +21,20 @@ class BeeHappyControls {
   async init() {
     // Ensure emote map is ready, and subscribe to updates
     var isInited = await window.BeeHappyEmotes?.init();
-    console.log("[Overlay-controls] Initializing BeeHappy Controls, emote map status: ", isInited);
+    // console.log("[Overlay-controls] Initializing BeeHappy Controls, emote map status: ", isInited);
     if (isInited) {
       console.log("[Overlay-controls] Initializing emote picker...");
       await this.createOverlay();
       await window.BeeHappyEmotes.init();
-      this.emoteMap = window.BeeHappyEmotes.getMap();
-      this.emoteRegex = window.BeeHappyEmotes.getRegex();
-      const lists = window.BeeHappyEmotes.getLists ? window.BeeHappyEmotes.getLists() : {};
-      const initialGlobal = Array.isArray(lists.global) ? lists.global : [];
-      const initialStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
+      // this.emoteMap = window.BeeHappyEmotes.getMap();
+      // this.emoteRegex = window.BeeHappyEmotes.getRegex();
 
-      const mergeListsToImageMap = (globalList = [], streamerList = []) => {
-        return [...globalList, ...streamerList].reduce((acc, item) => {
-          if (item && item.token) acc[item.token] = item.url || "";
-          return acc;
-        }, {});
-      };
-
-      this.emoteImageMap = mergeListsToImageMap(initialGlobal, initialStreamer);
-
-      // Subscribe to future updates
-      window.BeeHappyEmotes.onUpdate((map, regex, lists = {}) => {
-        console.log("[Overlay-controls] Emote map updated (onupdate), refreshing local data:", { mapSize: Object.keys(map || {}).length, hasRegex: !!regex });
-        this.emoteMap = map || {};
-        this.emoteRegex = regex || null;
-        const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
-        const nextStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
-        this.emoteImageMap = mergeListsToImageMap(nextGlobal, nextStreamer);
-      });
+      // // Subscribe to future updates
+      // window.BeeHappyEmotes.onUpdate((map, regex /*, lists = {} */) => {
+      //   console.log("[Overlay-controls] Emote map updated (onupdate), refreshing local data:", { mapSize: Object.keys(map || {}).length, hasRegex: !!regex });
+      //   this.emoteMap = map || {};
+      //   this.emoteRegex = regex || null;
+      // });
     } else {
       console.warn("[Overlay-controls] Some of the emote is not ready yet., retrying...");
       // Set time out and retries until init success
@@ -140,30 +125,6 @@ class BeeHappyControls {
             try {
               if (window.BeeHappyEmotes && typeof window.BeeHappyEmotes.refreshFromApi === "function") {
                 const ok = await window.BeeHappyEmotes.refreshFromApi();
-
-                // Update local emote data after successful refresh
-                // if (ok) {
-                //   this.emoteMap = window.BeeHappyEmotes.getMap();
-                //   this.emoteRegex = window.BeeHappyEmotes.getRegex();
-                //   const lists = window.BeeHappyEmotes.getLists ? window.BeeHappyEmotes.getLists() : {};
-                //   const refreshedGlobal = Array.isArray(lists.global) ? lists.global : [];
-                //   const refreshedStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
-
-                //   const mergeListsToImageMap = (globalList = [], streamerList = []) => {
-                //     return [...globalList, ...streamerList].reduce((acc, item) => {
-                //       if (item && item.token) acc[item.token] = item.url || "";
-                //       return acc;
-                //     }, {});
-                //   };
-
-                //   this.emoteImageMap = mergeListsToImageMap(refreshedGlobal, refreshedStreamer);
-                //   console.log("🐝 [Overlay] Local emote data updated after refresh:", {
-                //     mapSize: Object.keys(this.emoteMap).length,
-                //     imageMapSize: Object.keys(this.emoteImageMap).length,
-                //     hasRegex: !!this.emoteRegex
-                //   });
-                // }
-
                 refreshBtn.title = ok ? "Refreshed" : "Refresh failed";
               } else {
                 // Fallback: dispatch an event for other modules that may handle refresh
@@ -421,9 +382,9 @@ class BeeHappyControls {
 
     for (const selector of selectors) {
       const element = document.querySelector(selector);
-      console.log("🐝 Checking chat selector:", selector, element);
+      // console.log("🐝 Checking chat selector:", selector, element);
       if (element && element.getBoundingClientRect().width > 0) {
-        console.log("🐝 Found chat container using selector:", selector, element);
+        // console.log("🐝 Found chat container using selector:", selector, element);
         return element;
       }
     }

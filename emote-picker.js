@@ -27,7 +27,7 @@ class BeeHappyEmotePicker {
       // Wait for elements to be ready
       while (!this.searchInput || !this.searchResetBtn || !this.emoteGridGlobal || !this.emoteGridStreamer || this.tabButtons.length === 0) {
         if (this.retryCount >= this.maxRetries) {
-          console.warn("🐝 Element initialization timeout, will retry later");
+          console.warn("[EmotePicker] Element initialization timeout, will retry later");
           return;
         }
         this.retryCount++;
@@ -46,17 +46,17 @@ class BeeHappyEmotePicker {
       // Initialize once everything is ready
       if (!this.initialized) {
         this.initialized = true;
-        console.log("🐝 Emote picker initialized");
+        console.log("[EmotePicker] Emote picker initialized");
 
         // Set up the picker
         await this.setupPicker();
       }
     } catch (error) {
-      console.error("🐝 Initialization error:", error);
+      console.error("[EmotePicker] Initialization error:", error);
       // Retry until the max retries is reached
       if (this.retryCount < this.maxRetries) {
         this.retryCount++;
-        console.log(`🐝 Retrying initialization (${this.retryCount}/${this.maxRetries})...`);
+        console.log(`[EmotePicker] Retrying initialization (${this.retryCount}/${this.maxRetries})...`);
         setTimeout(() => this.init(), 500);
       } else {
         // Still try to set up with default emotes if possible
@@ -80,14 +80,20 @@ class BeeHappyEmotePicker {
 
     // ✅ Subscribe to updates FIRST, before any loading
     window.BeeHappyEmotes?.onUpdate?.((map, regex, lists = {}) => {
+      console.log("🐝 [EmotePicker] Received emote map update, updating display lists: ", lists);
       const globalList = Array.isArray(lists.global) ? lists.global : [];
       const streamerList = Array.isArray(lists.streamer) ? lists.streamer : [];
 
-      this.updateEmotesFromLists(globalList, streamerList);
+      if (globalList.length !== 0) {
+        this.updateEmotesFromGlobal(globalList);
+      }
+      if (streamerList.length !== 0) {
+        this.updateEmotesFromStreamer(streamerList);
+      }
       this.renderEmotes();
     });
 
-    console.log("🐝 [Picker] Pre-Loading emotes...");
+    console.log("[EmotePicker] Pre-Loading emotes...");
     await this.loadEmotes();
     this.renderEmotes();
   }
@@ -144,7 +150,7 @@ class BeeHappyEmotePicker {
   updateResetButtonVisibility() {
     if (this.searchResetBtn) {
       const shouldShow = this.searchTerm && this.searchTerm.length > 0;
-      console.log("🐝 [Picker] updateResetButtonVisibility - searchTerm:", this.searchTerm, "shouldShow:", shouldShow);
+      console.log("[EmotePicker] updateResetButtonVisibility - searchTerm:", this.searchTerm, "shouldShow:", shouldShow);
       if (shouldShow) {
         this.searchResetBtn.classList.add("visible");
       } else {
@@ -163,7 +169,7 @@ class BeeHappyEmotePicker {
         // Ignore errors if tooltip is already removed
       }
     });
-    console.log("🐝 [Picker] Cleaned up", existingTooltips.length, "existing tooltips");
+    console.log("[EmotePicker] Cleaned up", existingTooltips.length, "existing tooltips");
   }
 
   async loadEmotes() {
@@ -183,11 +189,11 @@ class BeeHappyEmotePicker {
             this.updateEmotesFromLists(refreshedLists.global || [], refreshedLists.streamer || []);
           }
         } catch (error) {
-          console.error("🐝 [Picker] refreshFromApi failed:", error);
+          console.error("[EmotePicker] refreshFromApi failed:", error);
         }
       }
     } catch (error) {
-      console.warn("🐝 Error loading BeeHappy emotes:", error);
+      console.warn("[EmotePicker] Error loading BeeHappy emotes:", error);
     }
   }
 
@@ -196,7 +202,17 @@ class BeeHappyEmotePicker {
     this.emotes.streamer = this.prepareDisplayList(streamerList, "streamer");
   }
 
+  updateEmotesFromGlobal(globalList) {
+    this.emotes.global = this.prepareDisplayList(globalList, "global");
+  }
+
+  updateEmotesFromStreamer(streamerList) {
+    this.emotes.streamer = this.prepareDisplayList(streamerList, "streamer");
+  }
+
+
   prepareDisplayList(list, type) {
+    console.log("[EmotePicker] Preparing display list for type:", type, "with", Array.isArray(list) ? list.length : 0, "items");
     if (!Array.isArray(list)) return [];
     return list.map((item) => ({
       id: item.token,
@@ -229,8 +245,8 @@ class BeeHappyEmotePicker {
 
   renderEmotes() {
     // console.log("🐝 [Picker] Rendering emotes...");
-    console.log("Global emotes: ", this.emotes.global);
-    console.log("Streamer emotes: ", this.emotes.streamer);
+    console.log("[EmotePicker] Global emotes:", this.emotes.global);
+    console.log("[EmotePicker] Streamer emotes:", this.emotes.streamer);
 
     this.renderGrid(this.emoteGridGlobal, this.emotes.global);
     this.renderGrid(this.emoteGridStreamer, this.emotes.streamer);
@@ -428,7 +444,7 @@ class BeeHappyEmotePicker {
         }
       }
     } catch (err) {
-      console.error("🐝 Failed to copy emote to clipboard:", err);
+      console.error("[EmotePicker] Failed to copy emote to clipboard:", err);
     } finally {
       // Show a transient toast if the copy succeeded, then hide the picker
       if (copied) {
@@ -492,18 +508,18 @@ class BeeHappyEmotePicker {
         }, 200);
       }, 1400);
     } catch (e) {
-      console.warn("🐝 Failed to show toast", e);
+      console.warn("[EmotePicker] Failed to show toast", e);
     }
   }
 
   togglePicker() {
     if (!this.picker) {
-      console.error("🐝 Picker element not found");
+      console.error("[EmotePicker] Picker element not found");
       return;
     }
 
     const isVisible = this.picker.classList.contains("visible");
-    console.log("🐝 [Picker] Toggling picker, currently visible:", isVisible);
+    console.log("[EmotePicker] Toggling picker, currently visible:", isVisible);
 
     if (isVisible) {
       this.hidePicker();
@@ -514,11 +530,11 @@ class BeeHappyEmotePicker {
 
   showPicker() {
     if (!this.picker) {
-      console.error("🐝 Picker element not found in showPicker");
+      console.error("[EmotePicker] Picker element not found in showPicker");
       return;
     }
 
-    console.log("🐝 [Picker] Showing picker, current visibility:", this.picker.classList.contains("visible"));
+    console.log("[EmotePicker] Showing picker, current visibility:", this.picker.classList.contains("visible"));
 
     // Simply add the visible class
     this.picker.classList.add("visible");
@@ -533,9 +549,9 @@ class BeeHappyEmotePicker {
 
     // Update search term from current input value and reset button visibility
     if (this.searchInput) {
-      console.log("🐝 [Picker] On show - input value:", this.searchInput.value, "searchTerm:", this.searchTerm);
+      console.log("[EmotePicker] On show - input value:", this.searchInput.value, "searchTerm:", this.searchTerm);
       this.searchTerm = this.searchInput.value.toLowerCase();
-      console.log("🐝 [Picker] Updated searchTerm to:", this.searchTerm);
+      console.log("[EmotePicker] Updated searchTerm to:", this.searchTerm);
     }
     this.updateResetButtonVisibility();
 
@@ -544,7 +560,7 @@ class BeeHappyEmotePicker {
       setTimeout(() => this.searchInput.focus(), 100);
     }
 
-    console.log("🐝 [Picker] Picker shown successfully");
+    console.log("[EmotePicker] Picker shown successfully");
   }
 
   adjustPickerPosition() {
@@ -553,7 +569,7 @@ class BeeHappyEmotePicker {
     // Get the emote button position to determine optimal picker placement
     const emoteBtn = document.getElementById("emoteBtn");
     if (!emoteBtn) {
-      console.warn("🐝 [Picker] Emote button not found for positioning");
+      console.warn("[EmotePicker] Emote button not found for positioning");
       return;
     }
 
@@ -563,7 +579,7 @@ class BeeHappyEmotePicker {
     const pickerHeight = 250; // Updated to match new compact height
     const margin = 6;
 
-    console.log("🐝 [Picker] Positioning picker relative to button:", {
+    console.log("[EmotePicker] Positioning picker relative to button:", {
       buttonTop: btnRect.top,
       buttonBottom: btnRect.bottom,
       viewportHeight,
@@ -579,7 +595,7 @@ class BeeHappyEmotePicker {
 
     if (preferBottom) {
       // Position below button
-      console.log("🐝 [Picker] Positioning below button (insufficient space above)");
+      console.log("[EmotePicker] Positioning below button (insufficient space above)");
       this.picker.style.bottom = "auto";
       this.picker.style.top = "100%";
       this.picker.style.marginTop = margin + "px";
@@ -587,7 +603,7 @@ class BeeHappyEmotePicker {
       this.picker.style.borderRadius = "0 0 8px 8px";
     } else {
       // Position above button (default)
-      console.log("🐝 [Picker] Positioning above button (default)");
+      console.log("[EmotePicker] Positioning above button (default)");
       this.picker.style.bottom = "100%";
       this.picker.style.top = "auto";
       this.picker.style.marginTop = "0";
@@ -602,7 +618,7 @@ class BeeHappyEmotePicker {
     // If picker would go off the left edge, shift it right but keep stable anchor
     const pickerRect = this.picker.getBoundingClientRect();
     if (pickerRect.left < 0) {
-      console.log("🐝 [Picker] Adjusting position to stay within left viewport boundary");
+      console.log("[EmotePicker] Adjusting position to stay within left viewport boundary");
       // Shift just enough to stay in bounds
       const shiftAmount = Math.abs(pickerRect.left) + 10; // 10px buffer
       this.picker.style.transform = `translateX(${shiftAmount}px)`;
@@ -653,9 +669,9 @@ document.addEventListener("beehappy:togglePicker", () => {
     if (window.beeHappyEmotePicker && typeof window.beeHappyEmotePicker.togglePicker === "function") {
       window.beeHappyEmotePicker.togglePicker();
     } else {
-      console.warn("🐝 beehappy:togglePicker received but picker not ready");
+      console.warn("[EmotePicker] beehappy:togglePicker received but picker not ready");
     }
   } catch (e) {
-    console.error("🐝 Error handling beehappy:togglePicker", e);
+    console.error("[EmotePicker] Error handling beehappy:togglePicker", e);
   }
 });

@@ -99,9 +99,9 @@
 
       const currentStreamer = window.BeeHappyUsers?.getCurrentStreamer?.();
       // console.log("🐝[DEBUG][Emote map] Current streamer: ", currentStreamer);
-      let streamerMeta = null;
+      let streamerMeta = null;  // Start with null for proper fallback detection
+
       if (currentStreamer) {
-        console.log("🐝[DEBUG][Emote map] Current streamer name:", currentStreamer);
         const streamerUrl = (typeof window.BeeHappyConstants?.getApiUrl === "function"
           ? window.BeeHappyConstants.getApiUrl(`/api/emotes/sets/user/${encodeURIComponent(currentStreamer)}`)
           : `${API_URL}/sets/user/${encodeURIComponent(currentStreamer)}`);
@@ -120,11 +120,13 @@
             setId: rawStreamerData?.id || null,
             ownerId: rawStreamerData?.ownerId || null,
             raw: rawStreamerData || null,
+            apiStatus: "fetched",
           };
 
-          const emotesFromStreamer = streamerResp.emotes || [];
+          const emotesFromStreamer = streamerResp.data.emotes || [];
 
           // Streamer specific emotes
+          console.log("🐝[Emote map] Emotes from streamer", currentStreamer, ":", emotesFromStreamer);
           if (Array.isArray(emotesFromStreamer) && emotesFromStreamer.length) {
             const streamerBase = new URL(streamerUrl, location.origin);
             emotesFromStreamer.forEach((item) => {
@@ -142,12 +144,19 @@
             });
           }
         } else if (streamerResp && !streamerResp.success) {
-          console.warn("🐝[Emote map] Streamer emote fetch failed", streamerResp.error);
+          streamerMeta = {
+            name: currentStreamer,
+            apiStatus: "fetched",
+          };
+          console.warn("🐝[Emote map] Streamer emote fetch failed", streamerResp.error, ", streamer meta: ", streamerMeta);
         }
 
+        // Fallback to previous valid meta if API fails (now works because streamerMeta can be null)
         if (!streamerMeta && state.meta.streamer && state.meta.streamer.name === currentStreamer) {
+          console.log("🐝[Emote map] Using fallback streamer meta for", currentStreamer);
           streamerMeta = { ...state.meta.streamer };
         }
+
         if (
           streamerList.length === 0 &&
           Array.isArray(state.streamerList) &&
@@ -157,6 +166,12 @@
         ) {
           streamerList.push(...state.streamerList);
         }
+      } else {
+        // No current streamer detected
+        streamerMeta = {
+          name: null,
+          apiStatus: "not_requested",
+        };
       }
 
       const hasEmotes = globalList.length > 0 || streamerList.length > 0;
@@ -173,7 +188,13 @@
       state.streamerList = streamerList;
       state.meta.streamer = streamerMeta;
 
-      console.log("🐝[Emote map] State updated, about to notify listeners. Map size:", Object.keys(state.map).length, "Listeners:", state.listeners.length);
+      console.log("[Emote map] New state:", {
+        mapSize: Object.keys(state.map).length,
+        hasRegex: !!state.regex,
+        globalCount: state.globalList.length,
+        streamerCount: state.streamerList.length
+      });
+      // console.log("🐝[Emote map] State updated, about to notify listeners. Map size:", Object.keys(state.map).length, "Listeners:", state.listeners.length);
 
       // Notify all listeners about the update
       notifyListeners();
@@ -189,7 +210,6 @@
 
   // Helper function to notify all listeners
   function notifyListeners() {
-    console.log("🐝[Emote map] (onupdate) Notifying", state.listeners.length, "listeners of update");
     console.log("🐝[Emote map] (onupdate) Current listeners array:", state.listeners.map((fn, i) => `Listener ${i}: ${fn.name || 'anonymous'}`));
 
     if (state.listeners.length === 0) {
@@ -234,16 +254,18 @@
 
   window.BeeHappyEmotes = {
     init: async () => {
-      if (state.map && state.regex) {
+      let isStreamerFetched = state.meta.streamer && state.meta.streamer.apiStatus === "fetched";
+      if (state.map && state.regex && isStreamerFetched) {
         // If already initialized, notify listeners with current data
-        console.log("[Emote map] Already initialized, notifying listeners");
+        console.log("[Emote map][ContentScript][EmotePicker] Already initialized, notifying listeners");
         notifyListeners();
         return true;
       }
-      console.log("[Emote map] Initializing again for those who called");
+      console.log("[Emote map][ContentScript][EmotePicker] Initializing again for those who called ", state);
       const ok = await refreshFromApi();
-      return ok && state.map && state.regex;
+      return ok && state.map && state.regex && isStreamerFetched;
     },
+
     getMap: () => state.map,
     getRegex: () => state.regex,
     getList: (scope = "global") => {
@@ -292,4 +314,19 @@
     },
     refreshFromApi,
   };
+
+  // Initialize after DOM is ready
+  function initializeEmoteMap() {
+    console.log("[Emote map] DOM ready, emote map system available (but not fetching yet)");
+    // The emote map is now available for use, but won't auto-fetch
+    // Fetching will only happen when init() is explicitly called
+  }
+
+  // Wait for DOM to be ready before making BeeHappyEmotes available
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeEmoteMap);
+  } else {
+    // DOM already ready
+    initializeEmoteMap();
+  }
 })();
