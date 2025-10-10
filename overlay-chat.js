@@ -43,6 +43,7 @@ class BeeHappyControls {
 
       // Subscribe to future updates
       window.BeeHappyEmotes.onUpdate((map, regex, lists = {}) => {
+        console.log("[Overlay-controls] Emote map updated (onupdate), refreshing local data:", { mapSize: Object.keys(map || {}).length, hasRegex: !!regex });
         this.emoteMap = map || {};
         this.emoteRegex = regex || null;
         const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
@@ -59,6 +60,9 @@ class BeeHappyControls {
     }
     this.setupEventListeners();
     this.setupResizeListener();
+
+    // Toggle the overlay for user
+    await this.toggle();
   }
 
   async createOverlay() {
@@ -136,7 +140,30 @@ class BeeHappyControls {
             try {
               if (window.BeeHappyEmotes && typeof window.BeeHappyEmotes.refreshFromApi === "function") {
                 const ok = await window.BeeHappyEmotes.refreshFromApi();
-                // this.startChatMonitoring();
+
+                // Update local emote data after successful refresh
+                // if (ok) {
+                //   this.emoteMap = window.BeeHappyEmotes.getMap();
+                //   this.emoteRegex = window.BeeHappyEmotes.getRegex();
+                //   const lists = window.BeeHappyEmotes.getLists ? window.BeeHappyEmotes.getLists() : {};
+                //   const refreshedGlobal = Array.isArray(lists.global) ? lists.global : [];
+                //   const refreshedStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
+
+                //   const mergeListsToImageMap = (globalList = [], streamerList = []) => {
+                //     return [...globalList, ...streamerList].reduce((acc, item) => {
+                //       if (item && item.token) acc[item.token] = item.url || "";
+                //       return acc;
+                //     }, {});
+                //   };
+
+                //   this.emoteImageMap = mergeListsToImageMap(refreshedGlobal, refreshedStreamer);
+                //   console.log("🐝 [Overlay] Local emote data updated after refresh:", {
+                //     mapSize: Object.keys(this.emoteMap).length,
+                //     imageMapSize: Object.keys(this.emoteImageMap).length,
+                //     hasRegex: !!this.emoteRegex
+                //   });
+                // }
+
                 refreshBtn.title = ok ? "Refreshed" : "Refresh failed";
               } else {
                 // Fallback: dispatch an event for other modules that may handle refresh
@@ -188,11 +215,6 @@ class BeeHappyControls {
       this.overlay.style.position = "fixed";
       this.overlay.style.isolation = "isolate"; // Create new stacking context
 
-      // console.log("🐝 Overlay created successfully");
-      // console.log("🐝 Overlay element:", this.overlay);
-      // console.log("🐝 Overlay parent:", this.overlay.parentElement);
-      // console.log("🐝 Overlay in DOM:", document.contains(this.overlay));
-
       // Load saved position
       this.loadPosition();
 
@@ -207,8 +229,8 @@ class BeeHappyControls {
         corner = document.createElement("div");
         corner.className = "beehappy-overlay-resizer-corner";
         corner.style.position = "absolute";
-        corner.style.width = "12px";
-        corner.style.height = "12px";
+        corner.style.width = "6px";
+        corner.style.height = "6px";
         corner.style.right = "6px";
         corner.style.bottom = "6px";
         corner.style.cursor = "nwse-resize";
@@ -595,41 +617,6 @@ class BeeHappyControls {
       }
     }
   }
-
-  // lookupAndLogUser(author) {
-  //   if (!author) return;
-  //   const trimmed = author.trim();
-  //   if (!trimmed) return;
-  //   const key = trimmed.toLowerCase();
-  //   if (this.loggedUsers.has(key)) {
-  //     return;
-  //   }
-  //   if (!window.BeeHappyUsers || typeof window.BeeHappyUsers.updateUserList !== "function") {
-  //     return;
-  //   }
-
-  //   this.loggedUsers.add(key);
-
-  //   window.BeeHappyUsers.updateUserList(trimmed)
-  //     .then((user) => {
-  //       if (user) {
-  //         console.log("🐝 [Overlay][Users] Fetched user info:", trimmed, user);
-  //       } else {
-  //         this.loggedUsers.delete(key);
-  //       }
-  //     })
-  //     .catch((error) => {
-  //       this.loggedUsers.delete(key);
-  //       console.warn("🐝 [Overlay][Users] Failed to fetch user info for", trimmed, error);
-  //     })
-  //     .finally(() => {
-  //       // Log the final array of users
-  //       var snapshot = window.BeeHappyUsers.cache;
-  //       for (const [normalizedName, user] of snapshot) {
-  //         console.log("Cached user: ", normalizedName, user);
-  //       }
-  //     });
-  // }
 }
 
 // Export for use in content script

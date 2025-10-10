@@ -39,15 +39,6 @@
     return parts.length ? new RegExp(parts.join("|"), "g") : null;
   }
 
-  async function ensureInitialized() {
-    console.log("[Emote map] Init state:", state.map, " and regex:", state.regex);
-    if (state.map && state.regex) {
-      return true;
-    } else {
-      return false;
-    }
-  }
-
   const sendRuntimeMessage = (payload) =>
     new Promise((resolve, reject) => {
       try {
@@ -65,6 +56,9 @@
     });
 
   let _inFlight = false;
+  // Fetch from BE
+  // Update map and regex
+  // Returns true if successful, false if failed
   async function refreshFromApi() {
     // Ask background to fetch (handles CORS/timeouts)
     try {
@@ -76,12 +70,13 @@
       const globalList = [];
       const streamerList = [];
 
+      // Global emotes
       if (resp?.success && Array.isArray(resp.data)) {
         const globalBase = new URL(API_URL, location.origin);
         resp.data.forEach((item) => {
           if (!item || typeof item.name !== "string") return;
           const slug = slugify(item.name);
-          const token = `[${slug}]`; // This is the one taht defines how users will type it
+          const token = `[${slug}]`; // This is the one that defines how users will type it
           const files = Array.isArray(item.files) ? item.files : [];
           const file = files.length ? files[files.length - 1] : null;
           const url = file?.url ? toAbsoluteUrl(globalBase, file.url) : "";
@@ -117,6 +112,7 @@
         });
         // console.log("🐝[DEBUG][Emote map] Emote set for streamer", currentStreamer, ":", streamerResp);
 
+        // Setup streamer meta and emotes
         if (streamerResp?.success) {
           const rawStreamerData = streamerResp.data;
           streamerMeta = {
@@ -126,20 +122,15 @@
             raw: rawStreamerData || null,
           };
 
-          const emotesFromStreamer = Array.isArray(rawStreamerData?.emotes)
-            ? rawStreamerData.emotes
-            : Array.isArray(rawStreamerData)
-              ? rawStreamerData
-              : Array.isArray(streamerResp?.emotes)
-                ? streamerResp.emotes
-                : [];
+          const emotesFromStreamer = streamerResp.emotes || [];
 
+          // Streamer specific emotes
           if (Array.isArray(emotesFromStreamer) && emotesFromStreamer.length) {
             const streamerBase = new URL(streamerUrl, location.origin);
             emotesFromStreamer.forEach((item) => {
               if (!item || typeof item.name !== "string") return;
               const slug = slugify(item.name);
-              const token = `[${slug}]`; // This is the one taht defines how users will type it
+              const token = `[${slug}]`; // This is the one that defines how users will type it
               const files = Array.isArray(item.files) ? item.files : [];
               const file = files.length ? files[files.length - 1] : null;
               const url = file?.url ? toAbsoluteUrl(streamerBase, file.url) : "";
@@ -175,26 +166,18 @@
         return false;
       }
 
-      // Update state, notify listeners
+      // Update state
       state.map = next;
       state.regex = buildRegex(state.map);
       state.globalList = globalList;
       state.streamerList = streamerList;
       state.meta.streamer = streamerMeta;
 
-      state.listeners.forEach((fn) => {
-        try {
-          const payload = {
-            global: state.globalList.slice(),
-            streamer: state.streamerList.slice(),
-            meta: {
-              ...state.meta,
-              streamer: state.meta.streamer ? { ...state.meta.streamer } : null,
-            },
-          };
-          fn(state.map, state.regex, payload);
-        } catch (_) { }
-      });
+      console.log("🐝[Emote map] State updated, about to notify listeners. Map size:", Object.keys(state.map).length, "Listeners:", state.listeners.length);
+
+      // Notify all listeners about the update
+      notifyListeners();
+
       _inFlight = false;
       return true;
     } catch (error) {
@@ -204,9 +187,59 @@
     }
   }
 
+  // Helper function to notify all listeners
+  function notifyListeners() {
+    console.log("🐝[Emote map] (onupdate) Notifying", state.listeners.length, "listeners of update");
+    console.log("🐝[Emote map] (onupdate) Current listeners array:", state.listeners.map((fn, i) => `Listener ${i}: ${fn.name || 'anonymous'}`));
+
+    if (state.listeners.length === 0) {
+      console.warn("🐝[Emote map] No listeners registered! This might indicate a timing issue.");
+      return;
+    }
+
+    state.listeners.forEach((fn, index) => {
+      try {
+        const payload = {
+          global: state.globalList.slice(),
+          streamer: state.streamerList.slice(),
+          meta: {
+            ...state.meta,
+            streamer: state.meta.streamer ? { ...state.meta.streamer } : null,
+          },
+        };
+        console.log(`🐝[Emote map] (onupdate) Calling listener ${index}:`, fn.name || 'anonymous');
+        console.log(`🐝[Emote map] (onupdate) Listener ${index} payload:`, {
+          mapSize: Object.keys(state.map).length,
+          hasRegex: !!state.regex,
+          globalCount: payload.global.length,
+          streamerCount: payload.streamer.length
+        });
+
+        const result = fn(state.map, state.regex, payload);
+        console.log(`🐝[Emote map] (onupdate) Listener ${index} completed successfully`);
+
+        // If the function returns a promise, catch any async errors
+        if (result && typeof result.catch === 'function') {
+          result.catch(error => {
+            console.error(`🐝[Emote map] (onupdate) Async error in listener ${index}:`, error);
+          });
+        }
+      } catch (error) {
+        console.error(`🐝[Emote map] (onupdate) Listener ${index} failed:`, error);
+        console.error(`🐝[Emote map] (onupdate) Listener ${index} error stack:`, error.stack);
+        console.error(`🐝[Emote map] (onupdate) Listener ${index} function:`, fn.toString().substring(0, 200) + '...');
+      }
+    });
+  }
+
   window.BeeHappyEmotes = {
     init: async () => {
-      if (state.map && state.regex) return true;
+      if (state.map && state.regex) {
+        // If already initialized, notify listeners with current data
+        console.log("[Emote map] Already initialized, notifying listeners");
+        notifyListeners();
+        return true;
+      }
       console.log("[Emote map] Initializing again for those who called");
       const ok = await refreshFromApi();
       return ok && state.map && state.regex;
@@ -226,7 +259,36 @@
     }),
     getStreamerMeta: () => state.meta.streamer,
     onUpdate: (fn) => {
-      if (typeof fn === "function") state.listeners.push(fn);
+      if (typeof fn === "function") {
+        // Check if this function is already registered to prevent duplicates
+        const alreadyExists = state.listeners.some(existingFn => existingFn === fn || existingFn.toString() === fn.toString());
+        if (alreadyExists) {
+          console.warn("🐝[Emote map] Listener already registered, skipping:", fn.name || 'anonymous');
+          return;
+        }
+
+        console.log("🐝[Emote map] Registering new listener:", fn.name || 'anonymous', "Total listeners will be:", state.listeners.length + 1);
+        state.listeners.push(fn);
+        // If we already have data, immediately notify the new listener
+        if (state.map && state.regex && (state.globalList.length > 0 || state.streamerList.length > 0)) {
+          console.log("🐝[Emote map] Immediately notifying new listener with existing data");
+          try {
+            const payload = {
+              global: state.globalList.slice(),
+              streamer: state.streamerList.slice(),
+              meta: {
+                ...state.meta,
+                streamer: state.meta.streamer ? { ...state.meta.streamer } : null,
+              },
+            };
+            fn(state.map, state.regex, payload);
+          } catch (error) {
+            console.warn("🐝[Emote map] New listener failed:", error);
+          }
+        }
+      } else {
+        console.warn("🐝[Emote map] onUpdate called with non-function:", typeof fn);
+      }
     },
     refreshFromApi,
   };

@@ -572,7 +572,7 @@ class BeeHappyEmotePicker {
       spaceBelow: viewportHeight - btnRect.bottom
     });
 
-    // Determine if there's enough space above the button
+    // Determine if there's enough space above the button for smart vertical positioning
     const spaceAbove = btnRect.top;
     const spaceBelow = viewportHeight - btnRect.bottom;
     const preferBottom = spaceAbove < pickerHeight + margin && spaceBelow >= pickerHeight + margin;
@@ -595,20 +595,22 @@ class BeeHappyEmotePicker {
       this.picker.style.borderRadius = "8px";
     }
 
-    // Adjust horizontal position if picker goes off the right edge
-    const pickerRect = this.picker.getBoundingClientRect();
-    if (pickerRect.right > viewportWidth) {
-      console.log("🐝 [Picker] Adjusting horizontal position (off right edge)");
-      this.picker.style.right = "0";
-      this.picker.style.left = "auto";
-    } else {
-      // Reset to default horizontal position
-      this.picker.style.right = "auto";
-      this.picker.style.left = "0";
-    }
-  }
+    // Always align to the right edge of the button container to avoid left/right jumping
+    this.picker.style.right = "0";
+    this.picker.style.left = "auto";
 
-  hidePicker() {
+    // If picker would go off the left edge, shift it right but keep stable anchor
+    const pickerRect = this.picker.getBoundingClientRect();
+    if (pickerRect.left < 0) {
+      console.log("🐝 [Picker] Adjusting position to stay within left viewport boundary");
+      // Shift just enough to stay in bounds
+      const shiftAmount = Math.abs(pickerRect.left) + 10; // 10px buffer
+      this.picker.style.transform = `translateX(${shiftAmount}px)`;
+    } else {
+      // Reset transform if no adjustment needed
+      this.picker.style.transform = "";
+    }
+  } hidePicker() {
     if (!this.picker) return;
 
     // console.log("🐝 [Picker] Hiding picker");

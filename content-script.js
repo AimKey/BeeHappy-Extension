@@ -13,29 +13,37 @@ class BeeHappyEmoteReplacer {
     this.updateEmoteImageMap();
 
     // Subscribe for future updates (e.g., API refresh)
-    window.BeeHappyEmotes?.onUpdate((map, regex, lists = {}) => {
-      console.log("[Content Script] Emote map updated:", map, regex, lists);
-      // Update internal maps so our replacer can act on new emotes immediately
-      this.emoteMap = map || this.emoteMap;
-      this.tokenRegex = regex || this.tokenRegex;
+    window.BeeHappyEmotes?.onUpdate(function contentScriptListener(map, regex, lists = {}) {
+      console.log("[Content Script] (onupdate) Emote map updated:", map, regex, lists);
 
-      // Update image map when emotes are refreshed (if a list was provided)
-      const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
-      const nextStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
-      const allEntries = [...nextGlobal, ...nextStreamer];
-      if (allEntries.length) {
-        this.emoteImageMap = allEntries.reduce((acc, item) => {
-          if (item && item.token) acc[item.token] = item.url || "";
-          return acc;
-        }, {});
-      } else {
-        // Fallback to reading from the exposed API lists
-        this.updateEmoteImageMap();
+      try {
+        // Update internal maps so our replacer can act on new emotes immediately
+        this.emoteMap = map || this.emoteMap;
+        this.tokenRegex = regex || this.tokenRegex;
+
+        // Update image map when emotes are refreshed (if a list was provided)
+        const nextGlobal = Array.isArray(lists.global) ? lists.global : [];
+        const nextStreamer = Array.isArray(lists.streamer) ? lists.streamer : [];
+        const allEntries = [...nextGlobal, ...nextStreamer];
+        if (allEntries.length) {
+          this.emoteImageMap = allEntries.reduce((acc, item) => {
+            if (item && item.token) acc[item.token] = item.url || "";
+            return acc;
+          }, {});
+        } else {
+          // Fallback to reading from the exposed API lists
+          this.updateEmoteImageMap();
+        }
+
+        // Re-scan messages on map update to apply new emotes
+        this.rescanExisting();
+
+        console.log("[Content Script] (onupdate) Successfully processed emote update");
+      } catch (error) {
+        console.error("[Content Script] (onupdate) Error processing emote update:", error);
+        throw error; // Re-throw so it's caught by the emote map error handler
       }
-
-      // Re-scan messages on map update to apply new emotes
-      this.rescanExisting();
-    });
+    }.bind(this));
   }
 
   updateEmoteImageMap() {
@@ -240,39 +248,23 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
   try {
     switch (request.action) {
-      case "test":
-        sendResponse({ success: true, message: "Content script is working!" });
-        break;
-
-      case "insertEmote":
-        // Future feature: Insert emote at cursor position
-        sendResponse({ success: true });
-        break;
-
-      case "getStatus":
-        sendResponse({
-          success: true,
-          isActive: !!overlayChat,
-          chatFound: !!document.querySelector("yt-live-chat-renderer"),
-        });
-        break;
-
       case "toggleOverlay":
         if (overlayChat) {
-          console.log("🐝 Toggling existing overlay chat");
+          console.log("[ContentScript] Toggling existing overlay chat");
           await overlayChat.toggle();
           sendResponse({ success: true, message: "Overlay toggled" });
         } else {
           // Try to initialize if not already done
           if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
             try {
-              console.log("🐝 Initializing new overlay chat instance");
+              console.log("[ContentScript] Initializing new overlay chat instance");
               overlayChat = new BeeHappyControls();
-              await overlayChat.toggle();
             } catch (error) {
+              console.error("[ContentScript] Failed to initialize overlay chat:", error);
               sendResponse({ success: false, error: "Failed to initialize overlay: " + error.message });
             }
           } else {
+            console.warn("[ContentScript] Not on YouTube page");
             sendResponse({ success: false, error: "Not on YouTube page" });
           }
         }
