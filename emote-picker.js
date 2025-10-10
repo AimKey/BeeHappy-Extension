@@ -46,7 +46,6 @@ class BeeHappyEmotePicker {
       // Initialize once everything is ready
       if (!this.initialized) {
         this.initialized = true;
-        console.log("[EmotePicker] Emote picker initialized");
 
         // Set up the picker
         await this.setupPicker();
@@ -56,7 +55,6 @@ class BeeHappyEmotePicker {
       // Retry until the max retries is reached
       if (this.retryCount < this.maxRetries) {
         this.retryCount++;
-        console.log(`[EmotePicker] Retrying initialization (${this.retryCount}/${this.maxRetries})...`);
         setTimeout(() => this.init(), 500);
       } else {
         // Still try to set up with default emotes if possible
@@ -80,7 +78,6 @@ class BeeHappyEmotePicker {
 
     // ✅ Subscribe to updates FIRST, before any loading
     window.BeeHappyEmotes?.onUpdate?.((map, regex, lists = {}) => {
-      console.log("🐝 [EmotePicker] Received emote map update, updating display lists: ", lists);
       const globalList = Array.isArray(lists.global) ? lists.global : [];
       const streamerList = Array.isArray(lists.streamer) ? lists.streamer : [];
 
@@ -93,7 +90,6 @@ class BeeHappyEmotePicker {
       this.renderEmotes();
     });
 
-    console.log("[EmotePicker] Pre-Loading emotes...");
     await this.loadEmotes();
     this.renderEmotes();
   }
@@ -150,7 +146,6 @@ class BeeHappyEmotePicker {
   updateResetButtonVisibility() {
     if (this.searchResetBtn) {
       const shouldShow = this.searchTerm && this.searchTerm.length > 0;
-      console.log("[EmotePicker] updateResetButtonVisibility - searchTerm:", this.searchTerm, "shouldShow:", shouldShow);
       if (shouldShow) {
         this.searchResetBtn.classList.add("visible");
       } else {
@@ -169,7 +164,6 @@ class BeeHappyEmotePicker {
         // Ignore errors if tooltip is already removed
       }
     });
-    console.log("[EmotePicker] Cleaned up", existingTooltips.length, "existing tooltips");
   }
 
   async loadEmotes() {
@@ -212,7 +206,6 @@ class BeeHappyEmotePicker {
 
 
   prepareDisplayList(list, type) {
-    console.log("[EmotePicker] Preparing display list for type:", type, "with", Array.isArray(list) ? list.length : 0, "items");
     if (!Array.isArray(list)) return [];
     return list.map((item) => ({
       id: item.token,
@@ -244,17 +237,12 @@ class BeeHappyEmotePicker {
   }
 
   renderEmotes() {
-    // console.log("🐝 [Picker] Rendering emotes...");
-    console.log("[EmotePicker] Global emotes:", this.emotes.global);
-    console.log("[EmotePicker] Streamer emotes:", this.emotes.streamer);
-
     this.renderGrid(this.emoteGridGlobal, this.emotes.global);
     this.renderGrid(this.emoteGridStreamer, this.emotes.streamer);
     this.setActiveTab(this.activeTab);
   }
 
   filterEmotes(emotes) {
-    // console.log("🐝 [Picker] Filtering emotes with searchTerm:", this.searchTerm);
     if (!this.searchTerm) return emotes;
     const term = this.searchTerm;
     return emotes.filter((emote) => {
@@ -519,7 +507,6 @@ class BeeHappyEmotePicker {
     }
 
     const isVisible = this.picker.classList.contains("visible");
-    console.log("[EmotePicker] Toggling picker, currently visible:", isVisible);
 
     if (isVisible) {
       this.hidePicker();
@@ -534,8 +521,6 @@ class BeeHappyEmotePicker {
       return;
     }
 
-    console.log("[EmotePicker] Showing picker, current visibility:", this.picker.classList.contains("visible"));
-
     // Simply add the visible class
     this.picker.classList.add("visible");
 
@@ -549,9 +534,7 @@ class BeeHappyEmotePicker {
 
     // Update search term from current input value and reset button visibility
     if (this.searchInput) {
-      console.log("[EmotePicker] On show - input value:", this.searchInput.value, "searchTerm:", this.searchTerm);
       this.searchTerm = this.searchInput.value.toLowerCase();
-      console.log("[EmotePicker] Updated searchTerm to:", this.searchTerm);
     }
     this.updateResetButtonVisibility();
 
@@ -559,8 +542,6 @@ class BeeHappyEmotePicker {
     if (this.searchInput) {
       setTimeout(() => this.searchInput.focus(), 100);
     }
-
-    console.log("[EmotePicker] Picker shown successfully");
   }
 
   adjustPickerPosition() {
@@ -579,15 +560,6 @@ class BeeHappyEmotePicker {
     const pickerHeight = 250; // Updated to match new compact height
     const margin = 6;
 
-    console.log("[EmotePicker] Positioning picker relative to button:", {
-      buttonTop: btnRect.top,
-      buttonBottom: btnRect.bottom,
-      viewportHeight,
-      pickerHeight,
-      spaceAbove: btnRect.top,
-      spaceBelow: viewportHeight - btnRect.bottom
-    });
-
     // Determine if there's enough space above the button for smart vertical positioning
     const spaceAbove = btnRect.top;
     const spaceBelow = viewportHeight - btnRect.bottom;
@@ -595,7 +567,6 @@ class BeeHappyEmotePicker {
 
     if (preferBottom) {
       // Position below button
-      console.log("[EmotePicker] Positioning below button (insufficient space above)");
       this.picker.style.bottom = "auto";
       this.picker.style.top = "100%";
       this.picker.style.marginTop = margin + "px";
@@ -603,7 +574,6 @@ class BeeHappyEmotePicker {
       this.picker.style.borderRadius = "0 0 8px 8px";
     } else {
       // Position above button (default)
-      console.log("[EmotePicker] Positioning above button (default)");
       this.picker.style.bottom = "100%";
       this.picker.style.top = "auto";
       this.picker.style.marginTop = "0";
@@ -618,7 +588,6 @@ class BeeHappyEmotePicker {
     // If picker would go off the left edge, shift it right but keep stable anchor
     const pickerRect = this.picker.getBoundingClientRect();
     if (pickerRect.left < 0) {
-      console.log("[EmotePicker] Adjusting position to stay within left viewport boundary");
       // Shift just enough to stay in bounds
       const shiftAmount = Math.abs(pickerRect.left) + 10; // 10px buffer
       this.picker.style.transform = `translateX(${shiftAmount}px)`;
@@ -644,16 +613,12 @@ class BeeHappyEmotePicker {
 
     // Clear search when hiding - ensure both input value and internal state are cleared
     if (this.searchInput) {
-      // console.log("🐝 [Picker] Clearing search on hide, previous value:", this.searchInput.value);
       this.searchInput.value = "";
       this.searchTerm = "";
       this.updateResetButtonVisibility();
       // Re-render emotes to show all emotes when search is cleared
       this.renderEmotes();
-      // console.log("🐝 [Picker] Search cleared, input value:", this.searchInput.value, "searchTerm:", this.searchTerm);
     }
-
-    // console.log("🐝 [Picker] Picker hidden successfully");
   }
 }
 

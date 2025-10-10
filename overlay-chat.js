@@ -450,15 +450,39 @@ class BeeHappyControls {
    * Cleanup method to remove event listeners
    */
   destroy() {
+    console.log("[Overlay-controls] Cleaning up overlay controls...");
+
     if (this._resizeHandler) {
       window.removeEventListener('resize', this._resizeHandler);
       this._resizeHandler = null;
     }
 
+    // Clean up mouse event listeners if they exist
+    if (this._onResizeMouseMove) {
+      document.removeEventListener("mousemove", this._onResizeMouseMove);
+    }
+    if (this._onResizeMouseUp) {
+      document.removeEventListener("mouseup", this._onResizeMouseUp);
+    }
+
+    // Remove overlay from DOM
     if (this.overlay) {
       this.overlay.remove();
       this.overlay = null;
     }
+
+    // Remove injected styles
+    const existingStyles = document.querySelector("#beehappy-overlay-styles");
+    if (existingStyles) {
+      existingStyles.remove();
+    }
+
+    // Reset state
+    this.isDragging = false;
+    this.isResizing = false;
+    this.userPositioned = false;
+
+    console.log("[Overlay-controls] Overlay controls cleanup complete");
   }
 
   savePosition() {

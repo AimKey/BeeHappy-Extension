@@ -5,6 +5,7 @@ class BeeHappyEmoteReplacer {
     this.observer = null;
     this.isProcessing = false;
     this.listenerRegistered = false; // Add this flag
+    this.intervalId = null; // Track the rescan interval
 
     // Use the centralized regex from emote-map.js instead of building our own
     this.tokenRegex = window.BeeHappyEmotes?.getRegex() || null;
@@ -18,16 +19,13 @@ class BeeHappyEmoteReplacer {
       window.BeeHappyEmotes?.onUpdate(this.handleEmoteUpdate.bind(this));
       this.listenerRegistered = true;
     }
+
+    // Init the fricking chatframe mf
+    this.chatFrame = document.querySelector("#chatframe");
+    this.chatDoc = this.chatFrame?.contentDocument || this.chatFrame?.contentWindow?.document;
   }
 
   handleEmoteUpdate(map, regex, lists) {
-    // Move listener logic to named method for better debugging
-    console.log("[ContentScript] (onupdate) New state:", {
-      mapSize: Object.keys(map).length,
-      hasRegex: !!regex,
-      globalCount: (lists.global || []).length,
-      streamerCount: (lists.streamer || []).length
-    });
     try {
       // Update internal maps so our replacer can act on new emotes immediately
       this.emoteMap = map || this.emoteMap;
@@ -44,14 +42,11 @@ class BeeHappyEmoteReplacer {
         }, {});
       } else {
         // Fallback to reading from the exposed API lists
-        console.log("[ContentScript] (onupdate) No lists provided, rebuilding image map from API");
         this.updateEmoteImageMap();
       }
 
       // Re-scan messages on map update to apply new emotes
       this.processMessages({ verbose: true });
-
-      console.log("[ContentScript] (onupdate) Successfully processed emote update");
     } catch (error) {
       console.error("[ContentScript] (onupdate) Error processing emote update:", error);
       throw error; // Re-throw so it's caught by the emote map error handler
@@ -72,8 +67,14 @@ class BeeHappyEmoteReplacer {
   processMessages(options = {}) {
     const { verbose = false } = options;
 
-    if (this.isProcessing) return;
+    if (this.isProcessing) {
+      return;
+    }
     this.isProcessing = true;
+
+    // Ensure we have the latest emote map and regex
+    this.emoteMap = window.BeeHappyEmotes?.getMap() || this.emoteMap;
+    this.tokenRegex = window.BeeHappyEmotes?.getRegex() || this.tokenRegex;
 
     try {
       // Try multiple selectors for YouTube chat messages
@@ -86,23 +87,16 @@ class BeeHappyEmoteReplacer {
 
       let messages = [];
       for (const selector of selectors) {
-        messages = document.querySelectorAll(selector);
+        messages = this.chatDoc.querySelectorAll(selector);
         if (messages.length > 0) break;
       }
 
       if (messages.length === 0) return;
 
-      if (verbose) {
-        console.log("[ContentScript] Processing emotes in", messages.length, "messages");
-        console.log("[ContentScript] Current emote map size:", Object.keys(this.emoteMap).length);
-        console.log("[ContentScript] Current emote image map size:", Object.keys(this.emoteImageMap).length);
-        console.log("[ContentScript] Current token regex:", this.tokenRegex);
-      }
-
       // DOM-safe replace: transform text nodes into spans without touching structure
       messages.forEach((msg) => this.transformMessage(msg));
     } catch (error) {
-      console.error("🐝 BeeHappy: Error processing emotes:", error);
+      // Error processing emotes
     } finally {
       this.isProcessing = false;
     }
@@ -115,7 +109,7 @@ class BeeHappyEmoteReplacer {
     if (msg.querySelector(`.${emoteClass}`)) return;
     if (!this.tokenRegex) return;
 
-    const walker = document.createTreeWalker(msg, NodeFilter.SHOW_TEXT, null);
+    const walker = this.chatDoc.createTreeWalker(msg, NodeFilter.SHOW_TEXT, null);
     const targets = [];
     let t;
     while ((t = walker.nextNode())) {
@@ -128,21 +122,21 @@ class BeeHappyEmoteReplacer {
     targets.forEach((textNode) => {
       const original = textNode.nodeValue || "";
       if (!original) return;
-      const frag = document.createDocumentFragment();
+      const frag = this.chatDoc.createDocumentFragment();
       let last = 0;
       this.tokenRegex.lastIndex = 0;
       let m;
       while ((m = this.tokenRegex.exec(original)) !== null) {
         const start = m.index;
         const end = start + m[0].length;
-        if (start > last) frag.appendChild(document.createTextNode(original.slice(last, start)));
+        if (start > last) frag.appendChild(this.chatDoc.createTextNode(original.slice(last, start)));
 
         const token = m[0];
         const url = this.emoteImageMap[token] || "";
 
         if (url && url !== "") {
           // Create image element like overlay chat does
-          const img = document.createElement("img");
+          const img = this.chatDoc.createElement("img");
           img.className = emoteClass;
           img.setAttribute("alt", token);
           img.setAttribute("src", url);
@@ -153,23 +147,23 @@ class BeeHappyEmoteReplacer {
           frag.appendChild(img);
         } else {
           // Fallback to text replacement or original token
-          const span = document.createElement("span");
+          const span = this.chatDoc.createElement("span");
           span.className = window.BeeHappyConstants?.UI_CONFIG?.EMOTE_CLASS || "bh-emote";
           span.textContent = this.emoteMap[token] || token;
           frag.appendChild(span);
         }
         last = end;
       }
-      if (last < original.length) frag.appendChild(document.createTextNode(original.slice(last)));
+      if (last < original.length) frag.appendChild(this.chatDoc.createTextNode(original.slice(last)));
       if (textNode.parentNode) textNode.parentNode.replaceChild(frag, textNode);
     });
   }
 
   startObserver() {
     const chatContainer =
-      document.querySelector("yt-live-chat-renderer") ||
-      document.querySelector("#chatframe") ||
-      document.querySelector("#chat");
+      this.chatDoc.querySelector("yt-live-chat-renderer") ||
+      this.chatDoc.querySelector("#chatframe") ||
+      this.chatDoc.querySelector("#chat");
 
     if (!chatContainer) {
       setTimeout(() => this.startObserver(), 2000);
@@ -212,12 +206,26 @@ class BeeHappyEmoteReplacer {
     // Process existing messages once on startup
     this.processMessages({ verbose: true });
     // Repeatedly rescan to catch rehydrated messages
-    setInterval(() => this.processMessages(), 1000);
+    this.intervalId = setInterval(() => this.processMessages({ verbose: true }), 1000);
+  }
+
+  // Cleanup method to stop observer and intervals
+  destroy() {
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
+
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+
+    // Reset processing state
+    this.isProcessing = false;
   }
 
   async init() {
-    console.log("[ContentScript] Starting emote replacer initialization...");
-
     // Wait for emote map to be ready (this should already be done by parent, but double-check)
     await (window.BeeHappyEmotes?.init?.() || Promise.resolve());
 
@@ -228,10 +236,7 @@ class BeeHappyEmoteReplacer {
     // Update image map after initialization
     this.updateEmoteImageMap();
 
-    console.log("[ContentScript] Starting chat observer...");
     this.startObserver();
-
-    console.log("[ContentScript] Emote replacer initialization complete");
   }
 }
 
@@ -240,6 +245,79 @@ let overlayChat = null;
 // Global replacer instance - prevent multiple initializations
 let emoteReplacer = null;
 let isContentScriptInitialized = false;
+
+// Track current page state
+let currentPageState = {
+  isYouTubePage: false,
+  lastUrl: window.location.href
+};
+
+// Check if current page is a YouTube watch/live page
+function isYouTubeWatchPage(url = window.location.href) {
+  return url.includes("youtube.com/watch") || url.includes("youtube.com/live");
+}
+
+// Cleanup function to destroy all extension components
+function cleanupExtension() {
+  if (emoteReplacer) {
+    emoteReplacer.destroy();
+    emoteReplacer = null;
+  }
+
+  if (overlayChat) {
+    overlayChat.destroy();
+    overlayChat = null;
+  }
+
+  // Reset initialization state
+  isContentScriptInitialized = false;
+  currentPageState.isYouTubePage = false;
+}
+
+// Monitor page navigation for YouTube's SPA routing
+function setupNavigationMonitoring() {
+  // Listen for URL changes (YouTube uses pushState for navigation)
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+
+  function handleUrlChange() {
+    const newUrl = window.location.href;
+    const wasYouTubePage = currentPageState.isYouTubePage;
+    const isNowYouTubePage = isYouTubeWatchPage(newUrl);
+
+    if (wasYouTubePage && !isNowYouTubePage) {
+      cleanupExtension();
+    } else if (!wasYouTubePage && isNowYouTubePage) {
+      setTimeout(() => {
+        if (!isContentScriptInitialized) {
+          initializeOverlay();
+        }
+      }, 1000); // Give YouTube time to load content
+    }
+
+    currentPageState.isYouTubePage = isNowYouTubePage;
+    currentPageState.lastUrl = newUrl;
+  }
+
+  // Override history methods to detect pushState navigation
+  history.pushState = function (...args) {
+    originalPushState.apply(history, args);
+    setTimeout(handleUrlChange, 100);
+  };
+
+  history.replaceState = function (...args) {
+    originalReplaceState.apply(history, args);
+    setTimeout(handleUrlChange, 100);
+  };
+
+  // Also listen for popstate (back/forward navigation)
+  window.addEventListener('popstate', () => {
+    setTimeout(handleUrlChange, 100);
+  });
+
+  // Initial state
+  currentPageState.isYouTubePage = isYouTubeWatchPage();
+}
 
 // Message handling for communication with popup and background
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
@@ -253,21 +331,17 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     switch (request.action) {
       case "toggleOverlay":
         if (overlayChat) {
-          console.log("[ContentScript] Toggling existing overlay chat");
           await overlayChat.toggle();
           sendResponse({ success: true, message: "Overlay toggled" });
         } else {
           // Try to initialize if not already done
           if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
             try {
-              console.log("[ContentScript] Initializing new overlay chat instance");
               overlayChat = new BeeHappyControls();
             } catch (error) {
-              console.error("[ContentScript] Failed to initialize overlay chat:", error);
               sendResponse({ success: false, error: "Failed to initialize overlay: " + error.message });
             }
           } else {
-            console.warn("[ContentScript] Not on YouTube page");
             sendResponse({ success: false, error: "Not on YouTube page" });
           }
         }
@@ -285,9 +359,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
 // Listener for auth bridge messages
 function authMessageListener() {
-  console.log("🐝 Setting up auth message listener...");
   window.addEventListener("message", async (event) => {
-    console.log("🐝 Auth message event:", event);
     // Only accept messages from BeeHappy's configured API origins (prod or dev)
     try {
       const prodBase = window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "";
@@ -295,124 +367,120 @@ function authMessageListener() {
       const allowed = [prodBase, devBase].filter(Boolean);
       const ok = allowed.some((base) => event.origin && event.origin.includes(base));
       if (!ok) {
-        console.warn("🐝 Ignoring message from unknown origin:", event.origin);
         return;
       }
     } catch (e) {
-      console.warn("🐝 Origin check failed", e);
       return;
     }
 
-    console.log("🐝 Received auth message:", event.data);
     if (event.data?.type === "BEEHAPPY_TOKEN") {
       // Get token from the storage and compare if it is the same
       const stored = await chrome.storage.local.get(["token"]);
       const token = event.data.token;
       if (stored.token === token) {
-        console.log("[BeeHappy] Token already stored, ignoring.");
         return;
       }
       if (token) {
         await chrome.storage.local.set({ token });
-        console.log("[BeeHappy] ✅ Token stored:", token);
       }
     }
   });
 }
 
-// Initialize the BeeHappy system
-if (window.top !== window) {
-  // We're in an iframe (in our case will be the youtube frame)- only initialize emote replacer
-  console.log("[ContentScript] In iframe: only initializing emote replacer");
+// Initialize overlay and emote replacer on YouTube pages
+const initializeOverlay = async () => {
+  // Prevent duplicate initialization
+  if (isContentScriptInitialized) {
+    return;
+  }
 
-  // Wait for DOM to be ready
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      if (!emoteReplacer) {
-        emoteReplacer = new BeeHappyEmoteReplacer();
-        emoteReplacer.init();
-      }
-    });
-  } else {
+  try {
+    // Wait for the emote map to be ready
+    const emoteMapReady = await window.BeeHappyEmotes?.init();
+
+    if (!emoteMapReady) {
+      setTimeout(() => {
+        if (!isContentScriptInitialized) {
+          initializeOverlay();
+        }
+      }, 2000);
+      return;
+    }
+
+    // Check if we have the necessary data
+    const emoteMap = window.BeeHappyEmotes?.getMap();
+    const emoteRegex = window.BeeHappyEmotes?.getRegex();
+    const streamerMeta = window.BeeHappyEmotes?.getStreamerMeta();
+    const streamerApiStatus = streamerMeta?.apiStatus;
+
+    // Init the emote replacer on the document like every other normal scripts
     if (!emoteReplacer) {
       emoteReplacer = new BeeHappyEmoteReplacer();
       emoteReplacer.init();
     }
-  }
-} else {
-  // In main page: check if we should initialize overlay
-  if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
 
-    const initializeOverlay = async () => {
-      // Prevent duplicate initialization
-      if (isContentScriptInitialized) {
-        console.log("[ContentScript] Already initialized, skipping");
-        return;
+    if (!emoteMap || !emoteRegex || streamerApiStatus !== "fetched") {
+      setTimeout(() => {
+        if (!isContentScriptInitialized) {
+          initializeOverlay();
+        }
+      }, 2000);
+      return;
+    }
+
+    isContentScriptInitialized = true;
+
+    // Initialize emote replacer
+    if (!emoteReplacer) {
+      emoteReplacer = new BeeHappyEmoteReplacer();
+      await emoteReplacer.init();
+    }
+
+    // Initialize overlay controls
+    if (!overlayChat) {
+      overlayChat = new window.BeeHappyControls();
+    }
+  } catch (error) {
+    console.error("[ContentScript] Error during initialization:", error);
+    isContentScriptInitialized = false;
+    // Retry initialization after error
+    setTimeout(() => {
+      if (!isContentScriptInitialized) {
+        initializeOverlay();
       }
+    }, 3000);
+  }
+};
 
-      try {
-        // Wait for emote map to be ready first
-        console.log("[ContentScript] Waiting for emote map to be ready...");
-        var result = await window.BeeHappyEmotes?.init?.();
+// Initialize the BeeHappy system
+if (window.top !== window) {
+  // We're in an iframe (in our case will be the youtube frame)- only initialize emote replacer
+} else {
+  // In main page: setup navigation monitoring and initialize if on YouTube
 
-        // Verify map and regex are available
-        // const map = window.BeeHappyEmotes?.getMap();
-        // const regex = window.BeeHappyEmotes?.getRegex();
-        // const streamer = window.BeeHappyEmotes?.getStreamerMeta();
-        // const isStreamerFetched = streamer && streamer.apiStatus === "fetch_success";
-        // console.log("[ContentScript] Emote map state:", {
-        //   mapSize: map ? Object.keys(map).length : 0,
-        //   hasRegex: !!regex,
-        //   isStreamerFetched,
-        //   streamerApiStatus: streamer?.apiStatus,
-        // });
+  // Setup navigation monitoring first
+  setupNavigationMonitoring();
 
-        if (!result) {
-          console.warn("[ContentScript] Emote map or regex not ready, or streamer not fetched, retrying...");
-          // Reset and allow retry
-          setTimeout(() => {
-            isContentScriptInitialized = false;
-            initializeOverlay();
-          }, 2000);
-          return;
-        }
-
-        // console.log("[ContentScript] Emote map ready with", Object.keys(map).length, "emotes");
-
-        // Initialize emote replacer only once
-        // if (!emoteReplacer) {
-        //   emoteReplacer = new BeeHappyEmoteReplacer();
-        //   await emoteReplacer.init();
-        //   console.log("[ContentScript] Emote replacer initialized");
-        // }
-
-        // Initialize overlay only once
-        if (!overlayChat) {
-          overlayChat = new BeeHappyControls();
-          console.log("[ContentScript] Overlay chat initialized in main page");
-        }
-
-        isContentScriptInitialized = true;
-      } catch (error) {
-        console.error("[ContentScript] Failed to initialize:", error);
-        // Reset state on failure to allow retry
-        isContentScriptInitialized = false;
-        emoteReplacer = null;
-        overlayChat = null;
+  if (isYouTubeWatchPage()) {
+    const initialize = () => {
+      if (!isContentScriptInitialized) {
+        initializeOverlay();
       }
     };
+
     // Wait for DOM to be ready before initializing
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => {
-        initializeOverlay();
-      });
+      document.addEventListener("DOMContentLoaded", initialize);
     } else {
       // DOM already ready
-      initializeOverlay();
+      initialize();
     }
+
     // Also try after a delay for YouTube's dynamic loading
     setTimeout(() => {
-      if (!isContentScriptInitialized) initializeOverlay();
+      if (!isContentScriptInitialized) {
+        initialize();
+      }
     }, 3000);
   } else if (
     window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "") ||
