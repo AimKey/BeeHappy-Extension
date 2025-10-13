@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "BeeHappy Emote",
-  "version": "1.1",
+  "version": "1.2",
   "description": "YouTube emote replacement for BeeHappy",
-  "permissions": ["identity", "activeTab", "storage", "scripting", "webRequest"],
+  "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [
     "https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/*",
     "https://www.youtube.com/*",
@@ -41,8 +41,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'",
-    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "background": {
     "service_worker": "background.js"
@@ -52,9 +51,9 @@
     "default_title": "BeeHappy Emotes"
   },
   "icons": {
-    "16": "./assets/icons/BeeHappyLogo.png",
-    "32": "./assets/icons/BeeHappyLogo.png",
-    "48": "./assets/icons/BeeHappyLogo.png",
-    "128": "./assets/icons/BeeHappyLogo.png"
+    "16": "assets/icons/BeeHappyLogo.png",
+    "32": "assets/icons/BeeHappyLogo.png",
+    "48": "assets/icons/BeeHappyLogo.png",
+    "128": "assets/icons/BeeHappyLogo.png"
   }
 }
