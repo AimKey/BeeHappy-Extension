@@ -20,9 +20,63 @@ class BeeHappyEmoteReplacer {
       this.listenerRegistered = true;
     }
 
-    // Init the fricking chatframe mf
-    this.chatFrame = document.querySelector("#chatframe");
-    this.chatDoc = this.chatFrame?.contentDocument || this.chatFrame?.contentWindow?.document;
+    // Chat document will be retrieved dynamically as needed
+    console.log("[ContentScript] BeeHappyEmoteReplacer initialized");
+  }
+
+  /**
+   * Retrieves the current chat document with a single attempt
+   * @returns {Document|null} The chat document or null if not found
+   */
+  getChatDocSingle() {
+    // Try multiple selectors for chat frame
+    const chatFrameSelectors = [
+      "#chatframe",
+      "iframe#chatframe",
+      'iframe[src*="live_chat"]',
+      'iframe[src*="chat"]'
+    ];
+
+    let chatFrame = null;
+    for (const selector of chatFrameSelectors) {
+      chatFrame = document.querySelector(selector);
+      if (chatFrame) {
+        break;
+      }
+    }
+
+    if (chatFrame) {
+      const chatDoc = chatFrame.contentDocument || chatFrame.contentWindow?.document;
+      if (chatDoc && chatDoc.readyState !== 'loading') {
+        return chatDoc;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Asynchronously retrieves the chat document with proper retry delays
+   * This is the main method that should be used for getting chat documents
+   * @param {number} maxRetries - Maximum number of retry attempts
+   * @param {number} retryDelay - Delay between retries in milliseconds
+   * @returns {Promise<Document|null>} The chat document or null if not found
+   */
+  async getChatDoc(maxRetries = 12, retryDelay = 5000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const chatDoc = this.getChatDocSingle();
+      if (chatDoc) {
+        return chatDoc;
+      }
+
+      // If not the last attempt, wait before retrying to allow DOM to update
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+
+    console.warn(`[ContentScript] Failed to get chat document after ${maxRetries} attempts`);
+    return null;
   }
 
   handleEmoteUpdate(map, regex, lists) {
@@ -46,7 +100,9 @@ class BeeHappyEmoteReplacer {
       }
 
       // Re-scan messages on map update to apply new emotes
-      this.processMessages({ verbose: true });
+      this.processMessages({ verbose: true }).catch(error => {
+        console.error("[ContentScript] Error in handleEmoteUpdate processMessages:", error);
+      });
     } catch (error) {
       console.error("[ContentScript] (onupdate) Error processing emote update:", error);
       throw error; // Re-throw so it's caught by the emote map error handler
@@ -64,7 +120,7 @@ class BeeHappyEmoteReplacer {
     }, {});
   }
 
-  processMessages(options = {}) {
+  async processMessages(options = {}) {
     const { verbose = false } = options;
 
     if (this.isProcessing) {
@@ -77,6 +133,12 @@ class BeeHappyEmoteReplacer {
     this.tokenRegex = window.BeeHappyEmotes?.getRegex() || this.tokenRegex;
 
     try {
+      // Get the current chat document dynamically with retries for quick checks
+      const chatDoc = await this.getChatDoc(5, 1000); // Moderate retries for frequent calls
+      if (!chatDoc) {
+        return;
+      }
+
       // Try multiple selectors for YouTube chat messages
       const selectors = window.BeeHappyConstants?.YOUTUBE_SELECTORS?.CHAT_MESSAGES || [
         "yt-live-chat-text-message-renderer #message",
@@ -87,29 +149,43 @@ class BeeHappyEmoteReplacer {
 
       let messages = [];
       for (const selector of selectors) {
-        messages = this.chatDoc.querySelectorAll(selector);
-        if (messages.length > 0) break;
+        messages = chatDoc.querySelectorAll(selector);
+        if (messages.length > 0) {
+          break;
+        }
       }
 
-      if (messages.length === 0) return;
+      if (messages.length === 0) {
+        return;
+      }
 
       // DOM-safe replace: transform text nodes into spans without touching structure
-      messages.forEach((msg) => this.transformMessage(msg));
+      for (const msg of messages) {
+        await this.transformMessage(msg, chatDoc);
+      }
     } catch (error) {
-      // Error processing emotes
+      console.error("[ContentScript] Error processing messages:", error);
     } finally {
       this.isProcessing = false;
     }
   }
 
   // This one transform the message in youtube chat
-  transformMessage(msg) {
+  async transformMessage(msg, chatDoc = null) {
+    // Get chat document dynamically if not provided
+    if (!chatDoc) {
+      chatDoc = await this.getChatDoc(5, 1000); // Moderate retries for transform calls
+      if (!chatDoc) {
+        return;
+      }
+    }
+
     // If we already added our spans here, skip until YouTube re-renders
     const emoteClass = window.BeeHappyConstants?.UI_CONFIG?.EMOTE_CLASS || "bh-emote";
     if (msg.querySelector(`.${emoteClass}`)) return;
     if (!this.tokenRegex) return;
 
-    const walker = this.chatDoc.createTreeWalker(msg, NodeFilter.SHOW_TEXT, null);
+    const walker = chatDoc.createTreeWalker(msg, NodeFilter.SHOW_TEXT, null);
     const targets = [];
     let t;
     while ((t = walker.nextNode())) {
@@ -122,21 +198,21 @@ class BeeHappyEmoteReplacer {
     targets.forEach((textNode) => {
       const original = textNode.nodeValue || "";
       if (!original) return;
-      const frag = this.chatDoc.createDocumentFragment();
+      const frag = chatDoc.createDocumentFragment();
       let last = 0;
       this.tokenRegex.lastIndex = 0;
       let m;
       while ((m = this.tokenRegex.exec(original)) !== null) {
         const start = m.index;
         const end = start + m[0].length;
-        if (start > last) frag.appendChild(this.chatDoc.createTextNode(original.slice(last, start)));
+        if (start > last) frag.appendChild(chatDoc.createTextNode(original.slice(last, start)));
 
         const token = m[0];
         const url = this.emoteImageMap[token] || "";
 
         if (url && url !== "") {
           // Create image element like overlay chat does
-          const img = this.chatDoc.createElement("img");
+          const img = chatDoc.createElement("img");
           img.className = emoteClass;
           img.setAttribute("alt", token);
           img.setAttribute("src", url);
@@ -147,41 +223,54 @@ class BeeHappyEmoteReplacer {
           frag.appendChild(img);
         } else {
           // Fallback to text replacement or original token
-          const span = this.chatDoc.createElement("span");
+          const span = chatDoc.createElement("span");
           span.className = window.BeeHappyConstants?.UI_CONFIG?.EMOTE_CLASS || "bh-emote";
           span.textContent = this.emoteMap[token] || token;
           frag.appendChild(span);
         }
         last = end;
       }
-      if (last < original.length) frag.appendChild(this.chatDoc.createTextNode(original.slice(last)));
+      if (last < original.length) frag.appendChild(chatDoc.createTextNode(original.slice(last)));
       if (textNode.parentNode) textNode.parentNode.replaceChild(frag, textNode);
     });
   }
 
-  startObserver() {
-    const chatContainer =
-      this.chatDoc.querySelector("yt-live-chat-renderer") ||
-      this.chatDoc.querySelector("#chatframe") ||
-      this.chatDoc.querySelector("#chat");
-
-    if (!chatContainer) {
+  async startObserver() {
+    // Get chat document dynamically with retries - use full retry capability for initialization
+    const chatDoc = await this.getChatDoc(); // Uses default: 12 retries, 5 seconds each = up to 60 seconds
+    if (!chatDoc) {
+      console.warn("[ContentScript] Chat document unavailable after retries, retrying observer setup");
       setTimeout(() => this.startObserver(), 2000);
       return;
     }
 
-    this.observer = new MutationObserver((mutations) => {
+    const chatContainer =
+      chatDoc.querySelector("yt-live-chat-renderer") ||
+      chatDoc.querySelector("#chatframe") ||
+      chatDoc.querySelector("#chat");
+
+    if (!chatContainer) {
+      console.warn("[ContentScript] Chat container not found, retrying observer setup");
+      setTimeout(() => this.startObserver(), 2000);
+      return;
+    }
+
+    this.observer = new MutationObserver(async (mutations) => {
       // Skip if already processing to avoid race conditions
       if (this.isProcessing) return;
 
+      // Get fresh chat document for each mutation batch (single attempt for performance)
+      const currentChatDoc = this.getChatDocSingle();
+      if (!currentChatDoc) return;
+
       let touched = false;
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType !== 1) return;
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== 1) continue;
           if (node.tagName === "YT-LIVE-CHAT-TEXT-MESSAGE-RENDERER") {
             const msg = node.querySelector("#message") || node.querySelector(".message");
             if (msg) {
-              this.transformMessage(msg);
+              await this.transformMessage(msg, currentChatDoc);
               touched = true;
             }
           } else {
@@ -190,12 +279,12 @@ class BeeHappyEmoteReplacer {
               (node.querySelector("yt-live-chat-text-message-renderer #message") ||
                 node.querySelector("yt-live-chat-text-message-renderer .message"));
             if (inner) {
-              this.transformMessage(inner);
+              await this.transformMessage(inner, currentChatDoc);
               touched = true;
             }
           }
-        });
-      });
+        }
+      }
     });
 
     this.observer.observe(chatContainer, {
@@ -203,10 +292,14 @@ class BeeHappyEmoteReplacer {
       subtree: true,
     });
 
+    console.log("[ContentScript] Chat observer started successfully");
+
     // Process existing messages once on startup
-    this.processMessages({ verbose: true });
+    await this.processMessages({ verbose: true });
     // Repeatedly rescan to catch rehydrated messages
-    this.intervalId = setInterval(() => this.processMessages({ verbose: true }), 1000);
+    this.intervalId = setInterval(async () => {
+      await this.processMessages({ verbose: false }); // Less verbose for interval calls
+    }, 1000);
   }
 
   // Cleanup method to stop observer and intervals
@@ -236,7 +329,7 @@ class BeeHappyEmoteReplacer {
     // Update image map after initialization
     this.updateEmoteImageMap();
 
-    this.startObserver();
+    await this.startObserver();
   }
 }
 
@@ -286,13 +379,24 @@ function setupNavigationMonitoring() {
     const isNowYouTubePage = isYouTubeWatchPage(newUrl);
 
     if (wasYouTubePage && !isNowYouTubePage) {
+      console.log("[ContentScript] Left YouTube watch page, cleaning up");
       cleanupExtension();
     } else if (!wasYouTubePage && isNowYouTubePage) {
+      console.log("[ContentScript] Navigated to YouTube watch page, initializing");
       setTimeout(() => {
         if (!isContentScriptInitialized) {
           initializeOverlay();
         }
       }, 1000); // Give YouTube time to load content
+    } else if (isNowYouTubePage && !isContentScriptInitialized) {
+      // Handle case where we're already on a YouTube page but not initialized
+      // This covers navigation within YouTube (homepage -> watch page)
+      console.log("[ContentScript] YouTube watch page detected, initializing");
+      setTimeout(() => {
+        if (!isContentScriptInitialized) {
+          initializeOverlay();
+        }
+      }, 1000);
     }
 
     currentPageState.isYouTubePage = isNowYouTubePage;
@@ -313,6 +417,24 @@ function setupNavigationMonitoring() {
   // Also listen for popstate (back/forward navigation)
   window.addEventListener('popstate', () => {
     setTimeout(handleUrlChange, 100);
+  });
+
+  // Listen for YouTube's DOM changes that indicate navigation
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      // Check if the URL changed (YouTube updates without triggering standard events)
+      if (window.location.href !== currentPageState.lastUrl) {
+        setTimeout(handleUrlChange, 200);
+      }
+    });
+  });
+
+  // Observe the document for changes
+  observer.observe(document, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['data-page-type'] // YouTube sets this attribute
   });
 
   // Initial state
@@ -399,6 +521,7 @@ const initializeOverlay = async () => {
     const emoteMapReady = await window.BeeHappyEmotes?.init();
 
     if (!emoteMapReady) {
+      console.log("[ContentScript] Emote map not ready, retrying...");
       setTimeout(() => {
         if (!isContentScriptInitialized) {
           initializeOverlay();
@@ -420,6 +543,11 @@ const initializeOverlay = async () => {
     }
 
     if (!emoteMap || !emoteRegex || streamerApiStatus !== "fetched") {
+      console.log("[ContentScript] Waiting for required data:", {
+        emoteMap: !!emoteMap,
+        emoteRegex: !!emoteRegex,
+        streamerApiStatus
+      });
       setTimeout(() => {
         if (!isContentScriptInitialized) {
           initializeOverlay();
@@ -428,6 +556,7 @@ const initializeOverlay = async () => {
       return;
     }
 
+    console.log("[ContentScript] Extension initialized successfully");
     isContentScriptInitialized = true;
 
     // Initialize emote replacer
@@ -438,10 +567,14 @@ const initializeOverlay = async () => {
 
     // Initialize overlay controls
     if (!overlayChat) {
-      overlayChat = new window.BeeHappyControls();
+      if (window.BeeHappyControls) {
+        overlayChat = new window.BeeHappyControls();
+      } else {
+        console.warn("[ContentScript] BeeHappyControls not available");
+      }
     }
   } catch (error) {
-    console.error("[ContentScript] Error during initialization:", error);
+    console.error("[ContentScript] Initialization error:", error);
     isContentScriptInitialized = false;
     // Retry initialization after error
     setTimeout(() => {
@@ -453,15 +586,17 @@ const initializeOverlay = async () => {
 };
 
 // Initialize the BeeHappy system
+console.log("[ContentScript] BeeHappy extension loaded");
+
 if (window.top !== window) {
-  // We're in an iframe (in our case will be the youtube frame)- only initialize emote replacer
+  // We're in an iframe (chat frame) - emote replacer will be initialized automatically
 } else {
   // In main page: setup navigation monitoring and initialize if on YouTube
-
-  // Setup navigation monitoring first
   setupNavigationMonitoring();
 
   if (isYouTubeWatchPage()) {
+    console.log("[ContentScript] YouTube watch page detected");
+
     const initialize = () => {
       if (!isContentScriptInitialized) {
         initializeOverlay();
@@ -476,12 +611,27 @@ if (window.top !== window) {
       initialize();
     }
 
-    // Also try after a delay for YouTube's dynamic loading
+    // Fallback initialization after delay
     setTimeout(() => {
       if (!isContentScriptInitialized) {
         initialize();
       }
     }, 3000);
+
+    // Additional monitoring for YouTube SPA navigation
+    const checkYouTubePageInterval = setInterval(() => {
+      if (isYouTubeWatchPage() && !isContentScriptInitialized) {
+        initialize();
+        clearInterval(checkYouTubePageInterval); // Stop checking once initialized
+      } else if (!isYouTubeWatchPage() && isContentScriptInitialized) {
+        clearInterval(checkYouTubePageInterval);
+      }
+    }, 2000); // Check every 2 seconds
+
+    // Clear interval after 30 seconds to avoid infinite checking
+    setTimeout(() => {
+      clearInterval(checkYouTubePageInterval);
+    }, 30000);
   } else if (
     window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "") ||
     window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "")
