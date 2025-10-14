@@ -217,8 +217,10 @@ class BeeHappyEmoteReplacer {
           img.setAttribute("alt", token);
           img.setAttribute("src", url);
           img.setAttribute("loading", "lazy");
-          img.style.width = "36px";
-          img.style.height = "auto";
+          img.style.width = "auto";
+          img.style.maxWidth = "120px";
+          img.style.objectFit = "cover";
+          img.style.height = "36px";
           img.style.verticalAlign = "middle";
           frag.appendChild(img);
         } else {

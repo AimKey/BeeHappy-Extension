@@ -281,10 +281,11 @@ class BeeHappyEmotePicker {
           img.setAttribute("src", emote.url);
           img.setAttribute("alt", emote.label || emote.name);
           img.setAttribute("loading", "lazy");
-          img.setAttribute("width", "36");
+          // img.setAttribute("width", "36");
+          // img.style.maxWidth = "36px";
           img.setAttribute("height", "36");
-          img.style.maxWidth = "36px";
           img.style.maxHeight = "36px";
+          img.style.maxWidth = "120px";
           img.style.display = "block";
           emoteElement.appendChild(img);
         } else {
@@ -322,7 +323,7 @@ class BeeHappyEmotePicker {
             const img = document.createElement("img");
             img.src = emote.url;
             img.alt = emote.label || emote.name;
-            img.width = 64;
+            // img.width = 64;
             img.height = 64;
             img.style.display = "inline-block";
             img.style.verticalAlign = "middle";
