@@ -234,6 +234,24 @@ async function fetchUserByName(url, token, actionName = "fetch_user_by_name") {
   }
 }
 
+// Detect URL changes via webNavigation API and fire it so that the content script can init
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  const tabId = details.tabId;
+  const currentUrl = details.url;
+
+  // Wait a bit — let YouTube's SPA finish loading new content
+  setTimeout(() => {
+    chrome.tabs.sendMessage(tabId, { action: "url_changed", currentUrl }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn("[BeeHappy] No content script found:", chrome.runtime.lastError.message);
+      } else {
+        console.log("[BeeHappy] Response from content script:", response);
+      }
+    });
+  }, 3000); // 1.5s delay is safe for YouTube transitions
+});
+
+
 // Listen for installation/update
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install" || details.reason === "update") {
