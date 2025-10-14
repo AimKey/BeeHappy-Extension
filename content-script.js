@@ -352,167 +352,8 @@ function isYouTubeWatchPage(url = window.location.href) {
   return url.includes("youtube.com/watch") || url.includes("youtube.com/live");
 }
 
-// Cleanup function to destroy all extension components
-function cleanupExtension() {
-  if (emoteReplacer) {
-    emoteReplacer.destroy();
-    emoteReplacer = null;
-  }
-
-  if (overlayChat) {
-    overlayChat.destroy();
-    overlayChat = null;
-  }
-
-  // Reset initialization state
-  isContentScriptInitialized = false;
-  currentPageState.isYouTubePage = false;
-}
-
-// Monitor page navigation for YouTube's SPA routing
-function setupNavigationMonitoring() {
-  // Listen for URL changes (YouTube uses pushState for navigation)
-  const originalPushState = history.pushState;
-  const originalReplaceState = history.replaceState;
-
-  function handleUrlChange() {
-    const newUrl = window.location.href;
-    const wasYouTubePage = currentPageState.isYouTubePage;
-    const isNowYouTubePage = isYouTubeWatchPage(newUrl);
-
-    if (wasYouTubePage && !isNowYouTubePage) {
-      console.log("[ContentScript] Left YouTube watch page, cleaning up");
-      cleanupExtension();
-    } else if (!wasYouTubePage && isNowYouTubePage) {
-      console.log("[ContentScript] Navigated to YouTube watch page, initializing");
-      setTimeout(() => {
-        if (!isContentScriptInitialized) {
-          initializeOverlay();
-        }
-      }, 1000); // Give YouTube time to load content
-    } else if (isNowYouTubePage && !isContentScriptInitialized) {
-      // Handle case where we're already on a YouTube page but not initialized
-      // This covers navigation within YouTube (homepage -> watch page)
-      console.log("[ContentScript] YouTube watch page detected, initializing");
-      setTimeout(() => {
-        if (!isContentScriptInitialized) {
-          initializeOverlay();
-        }
-      }, 1000);
-    }
-
-    currentPageState.isYouTubePage = isNowYouTubePage;
-    currentPageState.lastUrl = newUrl;
-  }
-
-  // Override history methods to detect pushState navigation
-  history.pushState = function (...args) {
-    originalPushState.apply(history, args);
-    setTimeout(handleUrlChange, 100);
-  };
-
-  history.replaceState = function (...args) {
-    originalReplaceState.apply(history, args);
-    setTimeout(handleUrlChange, 100);
-  };
-
-  // Also listen for popstate (back/forward navigation)
-  window.addEventListener('popstate', () => {
-    setTimeout(handleUrlChange, 100);
-  });
-
-  // Listen for YouTube's DOM changes that indicate navigation
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      // Check if the URL changed (YouTube updates without triggering standard events)
-      if (window.location.href !== currentPageState.lastUrl) {
-        setTimeout(handleUrlChange, 200);
-      }
-    });
-  });
-
-  // Observe the document for changes
-  observer.observe(document, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['data-page-type'] // YouTube sets this attribute
-  });
-
-  // Initial state
-  currentPageState.isYouTubePage = isYouTubeWatchPage();
-}
-
-// Message handling for communication with popup and background
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-  // Skip message handling in iframes
-  if (window.top !== window) {
-    sendResponse({ error: "Not available in iframe" });
-    return true;
-  }
-
-  try {
-    switch (request.action) {
-      case "toggleOverlay":
-        if (overlayChat) {
-          await overlayChat.toggle();
-          sendResponse({ success: true, message: "Overlay toggled" });
-        } else {
-          // Try to initialize if not already done
-          if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
-            try {
-              overlayChat = new BeeHappyControls();
-            } catch (error) {
-              sendResponse({ success: false, error: "Failed to initialize overlay: " + error.message });
-            }
-          } else {
-            sendResponse({ success: false, error: "Not on YouTube page" });
-          }
-        }
-        break;
-
-      default:
-        sendResponse({ error: "Unknown action" });
-    }
-  } catch (error) {
-    sendResponse({ error: error.message });
-  }
-
-  return true; // Keep message channel open
-});
-
-// Listener for auth bridge messages
-function authMessageListener() {
-  window.addEventListener("message", async (event) => {
-    // Only accept messages from BeeHappy's configured API origins (prod or dev)
-    try {
-      const prodBase = window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "";
-      const devBase = window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "";
-      const allowed = [prodBase, devBase].filter(Boolean);
-      const ok = allowed.some((base) => event.origin && event.origin.includes(base));
-      if (!ok) {
-        return;
-      }
-    } catch (e) {
-      return;
-    }
-
-    if (event.data?.type === "BEEHAPPY_TOKEN") {
-      // Get token from the storage and compare if it is the same
-      const stored = await chrome.storage.local.get(["token"]);
-      const token = event.data.token;
-      if (stored.token === token) {
-        return;
-      }
-      if (token) {
-        await chrome.storage.local.set({ token });
-      }
-    }
-  });
-}
-
 // Initialize overlay and emote replacer on YouTube pages
-const initializeOverlay = async () => {
+const initializeOverlayAndReplacer = async () => {
   // Prevent duplicate initialization
   if (isContentScriptInitialized) {
     return;
@@ -526,7 +367,7 @@ const initializeOverlay = async () => {
       console.log("[ContentScript] Emote map not ready, retrying...");
       setTimeout(() => {
         if (!isContentScriptInitialized) {
-          initializeOverlay();
+          initializeOverlayAndReplacer();
         }
       }, 2000);
       return;
@@ -552,7 +393,7 @@ const initializeOverlay = async () => {
       });
       setTimeout(() => {
         if (!isContentScriptInitialized) {
-          initializeOverlay();
+          initializeOverlayAndReplacer();
         }
       }, 2000);
       return;
@@ -581,64 +422,193 @@ const initializeOverlay = async () => {
     // Retry initialization after error
     setTimeout(() => {
       if (!isContentScriptInitialized) {
-        initializeOverlay();
+        initializeOverlayAndReplacer();
       }
     }, 3000);
   }
 };
 
-// Initialize the BeeHappy system
-console.log("[ContentScript] BeeHappy extension loaded");
+if (window.top === window) {
+  const getChatDocSingle = () => {
+    // Try multiple selectors for chat frame
+    const chatFrameSelectors = [
+      "#chatframe",
+      "iframe#chatframe",
+      'iframe[src*="live_chat"]',
+      'iframe[src*="chat"]'
+    ];
 
-if (window.top !== window) {
-  // We're in an iframe (chat frame) - emote replacer will be initialized automatically
-} else {
-  // In main page: setup navigation monitoring and initialize if on YouTube
-  setupNavigationMonitoring();
-
-  if (isYouTubeWatchPage()) {
-    console.log("[ContentScript] YouTube watch page detected");
-
-    const initialize = () => {
-      if (!isContentScriptInitialized) {
-        initializeOverlay();
+    let chatFrame = null;
+    for (const selector of chatFrameSelectors) {
+      chatFrame = document.querySelector(selector);
+      if (chatFrame) {
+        break;
       }
-    };
-
-    // Wait for DOM to be ready before initializing
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", initialize);
-    } else {
-      // DOM already ready
-      initialize();
     }
 
-    // Fallback initialization after delay
-    setTimeout(() => {
-      if (!isContentScriptInitialized) {
-        initialize();
+    if (chatFrame) {
+      const chatDoc = chatFrame.contentDocument || chatFrame.contentWindow?.document;
+      if (chatDoc && chatDoc.readyState !== 'loading') {
+        return chatDoc;
       }
-    }, 3000);
+    }
 
-    // Additional monitoring for YouTube SPA navigation
-    const checkYouTubePageInterval = setInterval(() => {
-      if (isYouTubeWatchPage() && !isContentScriptInitialized) {
-        initialize();
-        clearInterval(checkYouTubePageInterval); // Stop checking once initialized
-      } else if (!isYouTubeWatchPage() && isContentScriptInitialized) {
-        clearInterval(checkYouTubePageInterval);
+    return null;
+  }
+
+  const getChatDoc = async (maxRetries = 3, retryDelay = 1000) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const chatDoc = await getChatDocSingle();
+      if (chatDoc) {
+        return chatDoc;
       }
-    }, 2000); // Check every 2 seconds
 
-    // Clear interval after 30 seconds to avoid infinite checking
-    setTimeout(() => {
-      clearInterval(checkYouTubePageInterval);
-    }, 30000);
-  } else if (
-    window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "") ||
-    window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "")
-  ) {
-    // We are in the auth bridge page, only init the listener
-    authMessageListener();
+      // If not the last attempt, wait before retrying to allow DOM to update
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+
+    console.warn(`[ContentScript] Failed to get chat document after ${maxRetries} attempts`);
+    return null;
+  };
+
+  const InitContentScriptAsync = async () => {
+    const chatDoc = await getChatDoc();
+    const isOnLivePage = chatDoc !== null;
+
+    console.log("[ContentScript] Detecting live page:", isOnLivePage);
+    if (isOnLivePage) {
+      console.log("[ContentScript] YouTube live page detected");
+
+      // Wait for DOM to be ready before initializing
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initializeOverlayAndReplacer);
+      } else {
+        // DOM already ready
+        initializeOverlayAndReplacer();
+      }
+
+      // Fallback initialization after delay
+      setTimeout(() => {
+        if (!isContentScriptInitialized) {
+          initializeOverlayAndReplacer();
+        }
+      }, 3000);
+    } else if (window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "") ||
+      window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "")) {
+      // We are in the auth bridge page, only init the listener
+      authMessageListener();
+    } else {
+      console.log("[ContentScript] Not a YouTube live page");
+    }
+  }
+
+  // Start initialization immediately
+  (async () => {
+    console.log("[ContentScript] Starting initialization");
+    await InitContentScriptAsync();
+  })();
+
+  // Listeners
+  chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+    if (window.top !== window) {
+      sendResponse({ error: "Not available in iframe" });
+      return true;
+    }
+
+    try {
+      switch (request.action) {
+        case "toggleOverlay":
+          if (overlayChat) {
+            await overlayChat.toggle();
+            sendResponse({ success: true, message: "Overlay toggled" });
+          } else {
+            // Try to initialize if not already done
+            if (window.location.href.includes("youtube.com/watch") || window.location.href.includes("youtube.com/live")) {
+              try {
+                overlayChat = new BeeHappyControls();
+              } catch (error) {
+                sendResponse({ success: false, error: "Failed to initialize overlay: " + error.message });
+              }
+            } else {
+              sendResponse({ success: false, error: "Not on YouTube page" });
+            }
+          }
+          break;
+        // Handle extension when url changed
+        case "url_changed": {
+          console.log("[ContentScript] URL changed:", request.url);
+          try {
+            const chatDoc = await getChatDoc();
+            const isOnLivePage = chatDoc !== null;
+            if (isOnLivePage) {
+              console.log("[ContentScript] Debug the BeeHappyControls and BeeHappyEmotes state:", {
+                isContentScriptInitialized,
+                BeeHappyControls: window.BeeHappyControls,
+                BeeHappyEmotes: window.BeeHappyEmotes
+              });
+              if (isContentScriptInitialized) {
+                console.log("[ContentScript] Chat detected on URL change, open overlay and refresh");
+                window.ManualFuncs?.showOverlayManually();
+                window.BeeHappyEmotes?.refreshFromApi();
+                sendResponse({ success: true });
+              } else {
+                console.log("[ContentScript] Chat detected on URL change, initializing overlay and emote replacer");
+                initializeOverlayAndReplacer();
+                sendResponse({ success: true });
+              }
+            } else {
+              console.log("[ContentScript] No chat detected on URL change, turning off overlay");
+              window.ManualFuncs?.hideOverlayManually();
+              sendResponse({ success: true });
+            }
+          } catch (error) {
+            console.error("[ContentScript] Error refreshing emote map (When URL changed):", error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+        }
+        default:
+          sendResponse({ error: "Unknown action" });
+      }
+    } catch (error) {
+      sendResponse({ error: error.message });
+    }
+
+    return true; // Keep message channel open
+  });
+
+  // Listener for auth bridge messages
+  function authMessageListener() {
+    window.addEventListener("message", async (event) => {
+      // Only accept messages from BeeHappy's configured API origins (prod or dev)
+      try {
+        const prodBase = window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "";
+        const devBase = window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "";
+        const allowed = [prodBase, devBase].filter(Boolean);
+        const ok = allowed.some((base) => event.origin && event.origin.includes(base));
+        if (!ok) {
+          return;
+        }
+      } catch (e) {
+        return;
+      }
+
+      if (event.data?.type === "BEEHAPPY_TOKEN") {
+        // Get token from the storage and compare if it is the same
+        const stored = await chrome.storage.local.get(["token"]);
+        const token = event.data.token;
+        if (stored.token === token) {
+          return;
+        }
+        if (token) {
+          await chrome.storage.local.set({ token });
+        }
+      }
+    });
   }
 }
+
+
+

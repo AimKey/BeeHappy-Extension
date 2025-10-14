@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "BeeHappy Emote",
-  "version": "1.3",
+  "version": "1.3.2",
   "description": "YouTube emote replacement for BeeHappy",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["activeTab", "storage", "scripting", "webNavigation"],
   "host_permissions": [
     "https://beehappy-gfghhffadqbra6g8.eastasia-01.azurewebsites.net/*",
     "https://www.youtube.com/*",
@@ -19,6 +19,7 @@
       ],
       "js": [
         "constants.js",
+        "helpers.js",
         "users-management.js",
         "emote-map.js",
         "emote-picker.js",
