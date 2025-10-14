@@ -69,14 +69,35 @@
       const next = Object.create(null);
       const globalList = [];
       const streamerList = [];
+      const usedTokens = new Set(); // Track used tokens to avoid duplicates
+
+      // Helper function to generate unique token
+      const generateUniqueToken = (baseName, origin = 'unknown') => {
+        const baseSlug = slugify(baseName);
+        let token = `[${baseSlug}]`;
+        let counter = 1;
+
+        // If token is already used, add numeric suffix
+        while (usedTokens.has(token)) {
+          counter++;
+          token = `[${baseSlug}${counter}]`;
+        }
+
+        // Log when we had to resolve a duplicate
+        if (counter > 1) {
+          console.log(`🐝[Emote map] Resolved duplicate emote name "${baseName}" (${origin}) to token: ${token}`);
+        }
+
+        usedTokens.add(token);
+        return token;
+      };
 
       // Global emotes
       if (resp?.success && Array.isArray(resp.data)) {
         const globalBase = new URL(API_URL, location.origin);
         resp.data.forEach((item) => {
           if (!item || typeof item.name !== "string") return;
-          const slug = slugify(item.name);
-          const token = `[${slug}]`; // This is the one that defines how users will type it
+          const token = generateUniqueToken(item.name, 'global');
           const files = Array.isArray(item.files) ? item.files : [];
           const file = files.length ? files[files.length - 1] : null;
           const url = file?.url ? toAbsoluteUrl(globalBase, file.url) : "";
@@ -90,8 +111,9 @@
         if (Array.isArray(state.globalList) && state.globalList.length) {
           globalList.push(...state.globalList);
           state.globalList.forEach((item) => {
-            if (item && item.token && !next[item.token]) {
+            if (item && item.token && !next[item.token] && !usedTokens.has(item.token)) {
               next[item.token] = item.name;
+              usedTokens.add(item.token);
             }
           });
         }
@@ -131,8 +153,7 @@
             const streamerBase = new URL(streamerUrl, location.origin);
             emotesFromStreamer.forEach((item) => {
               if (!item || typeof item.name !== "string") return;
-              const slug = slugify(item.name);
-              const token = `[${slug}]`; // This is the one that defines how users will type it
+              const token = generateUniqueToken(item.name, 'streamer');
               const files = Array.isArray(item.files) ? item.files : [];
               const file = files.length ? files[files.length - 1] : null;
               const url = file?.url ? toAbsoluteUrl(streamerBase, file.url) : "";
@@ -165,6 +186,13 @@
           state.meta.streamer.name === currentStreamer
         ) {
           streamerList.push(...state.streamerList);
+          // Add existing streamer tokens to the used tokens set
+          state.streamerList.forEach((item) => {
+            if (item && item.token && !next[item.token] && !usedTokens.has(item.token)) {
+              next[item.token] = item.name;
+              usedTokens.add(item.token);
+            }
+          });
         }
       } else {
         // No current streamer detected
