@@ -95,3 +95,67 @@ window.ManualFuncs = {
   showOverlayManually,
   hideOverlayManually,
 }
+
+function getChatDocSingle() {
+  // Try multiple selectors for chat frame
+  const chatFrameSelectors = [
+    "#chatframe",
+    "iframe#chatframe",
+    'iframe[src*="live_chat"]',
+    'iframe[src*="chat"]'
+  ];
+
+  let chatFrame = null;
+  for (const selector of chatFrameSelectors) {
+    chatFrame = document.querySelector(selector);
+    if (chatFrame) {
+      break;
+    }
+  }
+
+  if (chatFrame) {
+    const chatDoc = chatFrame.contentDocument || chatFrame.contentWindow?.document;
+    if (chatDoc && chatDoc.readyState !== 'loading') {
+      return chatDoc;
+    }
+  }
+
+  return null;
+}
+
+// Allow emote to dynamically insert into chat input
+function insertEmote(emoteText) {
+  const chatDoc = getChatDocSingle();
+  if (!chatDoc) {
+    console.log("[EmotePicker-Helpers] Chat document not found, cannot insert emote");
+    return;
+  }
+  const chatInput = chatDoc.querySelector('#input.yt-live-chat-text-input-field-renderer');
+  console.log("[EmotePicker-Helpers] Found chat input:", chatInput);
+  if (!chatInput) return;
+
+  // Focus the input
+  chatInput.focus();
+
+  // Create text node for the emote name (e.g. ":beeHappy:")
+  const emoteNode = chatDoc.createTextNode(' ' + emoteText);
+
+  // Insert at caret position (if user is typing)
+  const selection = chatDoc.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    chatInput.appendChild(emoteNode);
+  } else {
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(emoteNode);
+    // Move cursor to end of inserted text
+    range.setStartAfter(emoteNode);
+    range.setEndAfter(emoteNode);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  console.log("[EmotePicker-Helpers] Dispatching the auto insert event:", emoteText);
+  // Trigger input event so YouTube detects change
+  chatInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+}

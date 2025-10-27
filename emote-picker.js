@@ -431,9 +431,6 @@ if (window.top !== window) {
             if (ok) copied = true;
           } catch (_) { }
           ta.remove();
-          if (copied) {
-            // Successfully copied via fallback
-          }
         }
       } catch (err) {
         console.error("[EmotePicker] Failed to copy emote to clipboard:", err);
@@ -442,11 +439,14 @@ if (window.top !== window) {
         if (copied) {
           try {
             this.showCopiedToast(emote.label || textToCopy);
+            // Insert the emote directly into the chat input if possible
+            console.log("[EmotePicker] Inserting emote into chat input:", textToCopy);
+            insertEmote(textToCopy);
           } catch (e) {
             // Ignore toast failures
           }
         }
-        this.hidePicker();
+        // this.hidePicker();
         // Then reset the search bar
         // this.clearSearch();
       }
