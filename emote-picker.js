@@ -12,6 +12,7 @@ if (window.top !== window) {
       this.retryCount = 0;
       this.initialized = false;
       this.activeTab = "global";
+      this.handleDocumentClick = this.handleDocumentClick.bind(this);
 
       // Start initialization
       this.init();
@@ -130,6 +131,8 @@ if (window.top !== window) {
           });
         });
       }
+
+      document.addEventListener("click", this.handleDocumentClick, true);
 
       // Ensure the correct tab is visible on startup
       this.setActiveTab(this.activeTab);
@@ -431,9 +434,6 @@ if (window.top !== window) {
             if (ok) copied = true;
           } catch (_) { }
           ta.remove();
-          if (copied) {
-            // Successfully copied via fallback
-          }
         }
       } catch (err) {
         console.error("[EmotePicker] Failed to copy emote to clipboard:", err);
@@ -442,11 +442,14 @@ if (window.top !== window) {
         if (copied) {
           try {
             this.showCopiedToast(emote.label || textToCopy);
+            // Insert the emote directly into the chat input if possible
+            console.log("[EmotePicker] Inserting emote into chat input:", textToCopy);
+            insertEmote(textToCopy);
           } catch (e) {
             // Ignore toast failures
           }
         }
-        this.hidePicker();
+        // this.hidePicker();
         // Then reset the search bar
         // this.clearSearch();
       }
@@ -623,6 +626,28 @@ if (window.top !== window) {
         // Re-render emotes to show all emotes when search is cleared
         this.renderEmotes();
       }
+    }
+
+    handleDocumentClick(event) {
+      if (!this.picker || !this.picker.classList.contains("visible")) {
+        return;
+      }
+
+      const target = event.target;
+      if (!target) {
+        return;
+      }
+
+      if (this.picker.contains(target)) {
+        return;
+      }
+
+      const emoteBtn = document.getElementById("emoteBtn");
+      if (emoteBtn && emoteBtn.contains(target)) {
+        return;
+      }
+
+      this.hidePicker();
     }
   }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BeeHappy Emote",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "description": "YouTube emote replacement for BeeHappy",
   "permissions": ["activeTab", "storage", "scripting", "webNavigation"],
   "host_permissions": [
@@ -23,6 +23,7 @@
         "users-management.js",
         "emote-map.js",
         "emote-picker.js",
+        "emote-suggestions.js",
         "overlay-chat.js",
         "content-script.js"
       ],

@@ -177,77 +177,77 @@ if (window.top !== window) {
         // Load saved position
         this.loadPosition();
 
-        // Ensure there are resize handles: corner, right-edge, and bottom-edge.
-        // This allows resizing from the edges as well as the corner.
-        let corner = this.overlay.querySelector(".beehappy-overlay-resizer-corner");
-        let rightEdge = this.overlay.querySelector(".beehappy-overlay-resizer-right");
-        let bottomEdge = this.overlay.querySelector(".beehappy-overlay-resizer-bottom");
+        // // Ensure there are resize handles: corner, right-edge, and bottom-edge.
+        // // This allows resizing from the edges as well as the corner.
+        // let corner = this.overlay.querySelector(".beehappy-overlay-resizer-corner");
+        // let rightEdge = this.overlay.querySelector(".beehappy-overlay-resizer-right");
+        // let bottomEdge = this.overlay.querySelector(".beehappy-overlay-resizer-bottom");
 
-        // Create corner handle if missing (small square at bottom-right)
-        if (!corner) {
-          corner = document.createElement("div");
-          corner.className = "beehappy-overlay-resizer-corner";
-          corner.style.position = "absolute";
-          corner.style.width = "6px";
-          corner.style.height = "6px";
-          corner.style.right = "6px";
-          corner.style.bottom = "6px";
-          corner.style.cursor = "nwse-resize";
-          corner.style.zIndex = "10001";
-          corner.style.background = "transparent";
-          this.overlay.appendChild(corner);
-        }
+        // // Create corner handle if missing (small square at bottom-right)
+        // if (!corner) {
+        //   corner = document.createElement("div");
+        //   corner.className = "beehappy-overlay-resizer-corner";
+        //   corner.style.position = "absolute";
+        //   corner.style.width = "6px";
+        //   corner.style.height = "6px";
+        //   corner.style.right = "6px";
+        //   corner.style.bottom = "6px";
+        //   corner.style.cursor = "nwse-resize";
+        //   corner.style.zIndex = "10001";
+        //   corner.style.background = "transparent";
+        //   this.overlay.appendChild(corner);
+        // }
 
-        // Create right-edge handle if missing (full-height thin strip on the right)
-        if (!rightEdge) {
-          rightEdge = document.createElement("div");
-          rightEdge.className = "beehappy-overlay-resizer-right";
-          rightEdge.style.position = "absolute";
-          rightEdge.style.top = "6px";
-          rightEdge.style.bottom = "6px";
-          rightEdge.style.right = "0px";
-          rightEdge.style.width = "10px";
-          rightEdge.style.cursor = "ew-resize";
-          rightEdge.style.zIndex = "10000";
-          rightEdge.style.background = "transparent";
-          this.overlay.appendChild(rightEdge);
-        }
+        // // Create right-edge handle if missing (full-height thin strip on the right)
+        // if (!rightEdge) {
+        //   rightEdge = document.createElement("div");
+        //   rightEdge.className = "beehappy-overlay-resizer-right";
+        //   rightEdge.style.position = "absolute";
+        //   rightEdge.style.top = "6px";
+        //   rightEdge.style.bottom = "6px";
+        //   rightEdge.style.right = "0px";
+        //   rightEdge.style.width = "10px";
+        //   rightEdge.style.cursor = "ew-resize";
+        //   rightEdge.style.zIndex = "10000";
+        //   rightEdge.style.background = "transparent";
+        //   this.overlay.appendChild(rightEdge);
+        // }
 
-        // Create bottom-edge handle if missing (full-width thin strip on the bottom)
-        if (!bottomEdge) {
-          bottomEdge = document.createElement("div");
-          bottomEdge.className = "beehappy-overlay-resizer-bottom";
-          bottomEdge.style.position = "absolute";
-          bottomEdge.style.left = "6px";
-          bottomEdge.style.right = "6px";
-          bottomEdge.style.bottom = "0px";
-          bottomEdge.style.height = "10px";
-          bottomEdge.style.cursor = "ns-resize";
-          bottomEdge.style.zIndex = "10000";
-          bottomEdge.style.background = "transparent";
-          this.overlay.appendChild(bottomEdge);
-        }
+        // // Create bottom-edge handle if missing (full-width thin strip on the bottom)
+        // if (!bottomEdge) {
+        //   bottomEdge = document.createElement("div");
+        //   bottomEdge.className = "beehappy-overlay-resizer-bottom";
+        //   bottomEdge.style.position = "absolute";
+        //   bottomEdge.style.left = "6px";
+        //   bottomEdge.style.right = "6px";
+        //   bottomEdge.style.bottom = "0px";
+        //   bottomEdge.style.height = "10px";
+        //   bottomEdge.style.cursor = "ns-resize";
+        //   bottomEdge.style.zIndex = "10000";
+        //   bottomEdge.style.background = "transparent";
+        //   this.overlay.appendChild(bottomEdge);
+        // }
 
-        // Bind resize handlers
-        this._onResizeMouseMove = this._onResizeMouseMove.bind(this);
-        this._onResizeMouseUp = this._onResizeMouseUp.bind(this);
+        // // Bind resize handlers
+        // this._onResizeMouseMove = this._onResizeMouseMove.bind(this);
+        // this._onResizeMouseUp = this._onResizeMouseUp.bind(this);
 
-        // Wire mousedown on handles to kick off resize with the appropriate axis
-        corner.addEventListener("mousedown", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          this.startResize(ev, "both");
-        });
-        rightEdge.addEventListener("mousedown", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          this.startResize(ev, "x");
-        });
-        bottomEdge.addEventListener("mousedown", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          this.startResize(ev, "y");
-        });
+        // // Wire mousedown on handles to kick off resize with the appropriate axis
+        // corner.addEventListener("mousedown", (ev) => {
+        //   ev.preventDefault();
+        //   ev.stopPropagation();
+        //   this.startResize(ev, "both");
+        // });
+        // rightEdge.addEventListener("mousedown", (ev) => {
+        //   ev.preventDefault();
+        //   ev.stopPropagation();
+        //   this.startResize(ev, "x");
+        // });
+        // bottomEdge.addEventListener("mousedown", (ev) => {
+        //   ev.preventDefault();
+        //   ev.stopPropagation();
+        //   this.startResize(ev, "y");
+        // });
 
         // Now that overlay is in the DOM, start picker initialization
         initEmotePicker();

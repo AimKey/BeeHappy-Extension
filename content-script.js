@@ -20,6 +20,9 @@ class BeeHappyEmoteReplacer {
       this.listenerRegistered = true;
     }
 
+    this.initialized = false;
+    this.initPromise = null;
+
     // Chat document will be retrieved dynamically as needed
     console.log("[ContentScript] BeeHappyEmoteReplacer initialized");
   }
@@ -238,6 +241,9 @@ class BeeHappyEmoteReplacer {
   }
 
   async startObserver() {
+    if (this.observer) {
+      return;
+    }
     // Get chat document dynamically with retries - use full retry capability for initialization
     const chatDoc = await this.getChatDoc(); // Uses default: 12 retries, 5 seconds each = up to 60 seconds
     if (!chatDoc) {
@@ -318,20 +324,43 @@ class BeeHappyEmoteReplacer {
 
     // Reset processing state
     this.isProcessing = false;
+    this.initialized = false;
+    this.initPromise = null;
   }
 
   async init() {
-    // Wait for emote map to be ready (this should already be done by parent, but double-check)
-    await (window.BeeHappyEmotes?.init?.() || Promise.resolve());
+    if (this.initialized) {
+      return true;
+    }
 
-    // Get current state
-    this.emoteMap = window.BeeHappyEmotes?.getMap() || this.emoteMap;
-    this.tokenRegex = window.BeeHappyEmotes?.getRegex() || this.tokenRegex;
+    if (this.initPromise) {
+      return this.initPromise;
+    }
 
-    // Update image map after initialization
-    this.updateEmoteImageMap();
+    this.initPromise = (async () => {
+      try {
+        // Wait for emote map to be ready (this should already be done by parent, but double-check)
+        await (window.BeeHappyEmotes?.init?.() || Promise.resolve());
 
-    await this.startObserver();
+        // Get current state
+        this.emoteMap = window.BeeHappyEmotes?.getMap() || this.emoteMap;
+        this.tokenRegex = window.BeeHappyEmotes?.getRegex() || this.tokenRegex;
+
+        // Update image map after initialization
+        this.updateEmoteImageMap();
+
+        await this.startObserver();
+        this.initialized = true;
+        return true;
+      } catch (error) {
+        this.initialized = false;
+        throw error;
+      } finally {
+        this.initPromise = null;
+      }
+    })();
+
+    return this.initPromise;
   }
 }
 
@@ -340,6 +369,53 @@ let overlayChat = null;
 // Global replacer instance - prevent multiple initializations
 let emoteReplacer = null;
 let isContentScriptInitialized = false;
+
+const bootstrapState = {
+  inFlight: false, // true = currently initializing; prevents duplicate init calls
+  attempts: 0,
+  maxAttempts: 20,
+  retryDelay: 2000,
+  timerId: null,
+};
+
+function cancelBootstrapRetry() {
+  if (bootstrapState.timerId) {
+    clearTimeout(bootstrapState.timerId);
+    bootstrapState.timerId = null;
+  }
+}
+
+function scheduleBootstrapRetry(reason = "unspecified") {
+  if (isContentScriptInitialized) {
+    return;
+  }
+
+  if (bootstrapState.attempts >= bootstrapState.maxAttempts) {
+    console.warn("[ContentScript] Bootstrap retry limit reached", { reason, attempts: bootstrapState.attempts });
+    return;
+  }
+
+  cancelBootstrapRetry();
+  // The delay increases with each attempt (exponential backoff)
+  const backoffFactor = Math.max(bootstrapState.attempts - 1, 0);
+  const delayMs = Math.min(
+    Math.round(bootstrapState.retryDelay * Math.pow(1.5, backoffFactor)),
+    10000
+  );
+  console.log("[ContentScript] Scheduling bootstrap retry", {
+    reason,
+    attempt: bootstrapState.attempts,
+    delayMs,
+  });
+
+  bootstrapState.timerId = setTimeout(() => {
+    bootstrapState.timerId = null;
+    initializeOverlayAndReplacer({ reason: `retry-${reason}` }).catch((error) => {
+      console.error("[ContentScript] Bootstrap retry failed", error);
+      scheduleBootstrapRetry("retry-error");
+    });
+  }, delayMs);
+}
 
 // Track current page state
 let currentPageState = {
@@ -353,80 +429,97 @@ function isYouTubeWatchPage(url = window.location.href) {
 }
 
 // Initialize overlay and emote replacer on YouTube pages
-const initializeOverlayAndReplacer = async () => {
-  // Prevent duplicate initialization
+async function initializeOverlayAndReplacer(options = {}) {
+  const { reason = "manual" } = options;
+
   if (isContentScriptInitialized) {
-    return;
+    return true;
   }
 
-  try {
-    // Wait for the emote map to be ready
-    const emoteMapReady = await window.BeeHappyEmotes?.init();
+  if (bootstrapState.inFlight) {
+    console.log("[ContentScript] Bootstrap already in flight, skipping", { reason });
+    return false;
+  }
 
-    if (!emoteMapReady) {
-      console.log("[ContentScript] Emote map not ready, retrying...");
-      setTimeout(() => {
-        if (!isContentScriptInitialized) {
-          initializeOverlayAndReplacer();
-        }
-      }, 2000);
-      return;
+  bootstrapState.inFlight = true;
+  bootstrapState.attempts += 1;
+
+  console.log("[ContentScript] Bootstrap attempt", {
+    attempt: bootstrapState.attempts,
+    reason,
+  });
+
+  try {
+    if (!window.BeeHappyEmotes || typeof window.BeeHappyEmotes.init !== "function") {
+      console.warn("[ContentScript] BeeHappyEmotes API not ready yet");
+      scheduleBootstrapRetry("emotes-api-missing");
+      return false;
     }
 
-    // Check if we have the necessary data
-    const emoteMap = window.BeeHappyEmotes?.getMap();
-    const emoteRegex = window.BeeHappyEmotes?.getRegex();
-    const streamerMeta = window.BeeHappyEmotes?.getStreamerMeta();
+    const emoteMapReady = await window.BeeHappyEmotes.init();
+    if (!emoteMapReady) {
+      console.log("[ContentScript] Emote map not ready, retrying");
+      scheduleBootstrapRetry("emote-map-not-ready");
+      return false;
+    }
+
+    const emoteMap = window.BeeHappyEmotes.getMap?.();
+    const emoteRegex = window.BeeHappyEmotes.getRegex?.();
+    const streamerMeta = window.BeeHappyEmotes.getStreamerMeta?.();
     const streamerApiStatus = streamerMeta?.apiStatus;
 
-    // Init the emote replacer on the document like every other normal scripts
-    if (!emoteReplacer) {
-      emoteReplacer = new BeeHappyEmoteReplacer();
-      emoteReplacer.init();
-    }
-
     if (!emoteMap || !emoteRegex || streamerApiStatus !== "fetched") {
-      console.log("[ContentScript] Waiting for required data:", {
+      console.log("[ContentScript] Waiting for required data", {
         emoteMap: !!emoteMap,
         emoteRegex: !!emoteRegex,
-        streamerApiStatus
+        streamerApiStatus,
       });
-      setTimeout(() => {
-        if (!isContentScriptInitialized) {
-          initializeOverlayAndReplacer();
-        }
-      }, 2000);
-      return;
+      scheduleBootstrapRetry("emote-data-pending");
+      return false;
     }
 
-    console.log("[ContentScript] Extension initialized successfully");
-    isContentScriptInitialized = true;
-
-    // Initialize emote replacer
     if (!emoteReplacer) {
       emoteReplacer = new BeeHappyEmoteReplacer();
-      await emoteReplacer.init();
     }
 
-    // Initialize overlay controls
+    await emoteReplacer.init();
+
     if (!overlayChat) {
       if (window.BeeHappyControls) {
         overlayChat = new window.BeeHappyControls();
       } else {
-        console.warn("[ContentScript] BeeHappyControls not available");
+        console.warn("[ContentScript] BeeHappyControls not available yet");
+        scheduleBootstrapRetry("controls-missing");
+        return false;
       }
     }
+
+    isContentScriptInitialized = true;
+    cancelBootstrapRetry();
+    bootstrapState.attempts = 0;
+
+    console.log("[ContentScript] Extension initialized successfully");
+
+    try {
+      document.dispatchEvent(
+        new CustomEvent("BeeHappy:ExtensionReady", {
+          detail: { timestamp: Date.now() },
+        })
+      );
+    } catch (eventError) {
+      console.warn("[ContentScript] Failed to dispatch BeeHappy:ExtensionReady", eventError);
+    }
+
+    return true;
   } catch (error) {
-    console.error("[ContentScript] Initialization error:", error);
+    console.error("[ContentScript] Initialization error", error);
     isContentScriptInitialized = false;
-    // Retry initialization after error
-    setTimeout(() => {
-      if (!isContentScriptInitialized) {
-        initializeOverlayAndReplacer();
-      }
-    }, 3000);
+    scheduleBootstrapRetry("init-error");
+    return false;
+  } finally {
+    bootstrapState.inFlight = false;
   }
-};
+}
 
 if (window.top === window) {
   const getChatDocSingle = () => {
@@ -474,7 +567,7 @@ if (window.top === window) {
   };
 
   const InitContentScriptAsync = async () => {
-    const chatDoc = await getChatDoc();
+    const chatDoc = await getChatDoc(10, 1000);
     const isOnLivePage = chatDoc !== null;
 
     console.log("[ContentScript] Detecting live page:", isOnLivePage);
@@ -483,18 +576,24 @@ if (window.top === window) {
 
       // Wait for DOM to be ready before initializing
       if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initializeOverlayAndReplacer);
+        document.addEventListener(
+          "DOMContentLoaded",
+          () => {
+            initializeOverlayAndReplacer({ reason: "dom-content-loaded" }).catch((error) => {
+              console.error("[ContentScript] Bootstrap on DOMContentLoaded failed", error);
+            });
+          },
+          { once: true }
+        );
       } else {
         // DOM already ready
-        initializeOverlayAndReplacer();
+        await initializeOverlayAndReplacer({ reason: "initial-dom-ready" });
       }
 
       // Fallback initialization after delay
-      setTimeout(() => {
-        if (!isContentScriptInitialized) {
-          initializeOverlayAndReplacer();
-        }
-      }, 3000);
+      if (!isContentScriptInitialized) {
+        scheduleBootstrapRetry("initial-fallback");
+      }
     } else if (window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.PRODUCTION_URL || "") ||
       window.location.href.includes(window.BeeHappyConstants?.API_CONFIG?.DEVELOPMENT_URL || "")) {
       // We are in the auth bridge page, only init the listener
@@ -548,16 +647,18 @@ if (window.top === window) {
                 BeeHappyControls: window.BeeHappyControls,
                 BeeHappyEmotes: window.BeeHappyEmotes
               });
+              const bootstrapResult = await initializeOverlayAndReplacer({ reason: "url-change" });
+              if (!bootstrapResult) {
+                scheduleBootstrapRetry("url-change-pending");
+              }
+
               if (isContentScriptInitialized) {
-                console.log("[ContentScript] Chat detected on URL change, open overlay and refresh");
+                console.log("[ContentScript] Chat detected on URL change, ensuring overlay is visible and data fresh");
                 window.ManualFuncs?.showOverlayManually();
                 window.BeeHappyEmotes?.refreshFromApi();
-                sendResponse({ success: true });
-              } else {
-                console.log("[ContentScript] Chat detected on URL change, initializing overlay and emote replacer");
-                initializeOverlayAndReplacer();
-                sendResponse({ success: true });
               }
+
+              sendResponse({ success: true, initialized: isContentScriptInitialized });
             } else {
               console.log("[ContentScript] No chat detected on URL change, turning off overlay");
               window.ManualFuncs?.hideOverlayManually();
